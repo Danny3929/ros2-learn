@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ROS 2 Learn</title>
+<meta name="theme-color" content="#0b6e99">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <aside class="side" id="side">
+    <div class="brand">ROS 2 Learn <span>Humble · WSL · Python</span></div>
+    <div class="hud" id="hud"></div>
+    <nav id="nav"></nav>
+    <div class="side-foot"><button id="reset" class="link">Reset all progress</button></div>
+  </aside>
+  <main class="main">
+    <button class="menu" id="menu" aria-label="Toggle lesson list">☰ Lessons</button>
+    <article id="lesson"></article>
+  </main>
+</div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<script src="content/m0_linux.js"></script>
+<script src="content/m1_python.js"></script>
+<script src="content/m2_turtlesim.js"></script>
+<script src="content/m3_workspaces.js"></script>
+<script src="content/planned.js"></script>
+<script src="app.js"></script>
+<script>
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+</script>
+</body>
+</html>
