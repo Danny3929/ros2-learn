@@ -186,21 +186,41 @@
     currentId = null; renderNav(null); renderHud();
     var next = lessons.find(function (l) { return !state.done[l.id]; });
     var started = Object.keys(state.awards).length > 0;
-    $("lesson").innerHTML = '<div class="welcome"><h1>Learn ROS 2 from zero</h1>' +
-      '<div class="meta">Humble on Ubuntu 22.04 (WSL) · Python · simulation first</div>' +
-      "<p>This course assumes no Linux or Python experience. Earn <b>XP</b> for correct answers, quests and finished lessons, level up, keep a daily <b>streak</b> and collect badges.</p><ul>" +
-      "<li><b>Linux terminal</b>: the commands every ROS 2 session depends on.</li>" +
-      "<li><b>Python basics</b>: just enough to write ROS 2 nodes.</li>" +
-      "<li><b>ROS 2 in simulation</b>: turtlesim, then Gazebo and RViz. No robot needed.</li></ul>" +
-      "<p>Wrong answers never cost XP, so experiment. Tell Claude when you are stuck and paste the error.</p>" +
-      (next ? '<div class="actions"><a class="btn" href="#/' + next.id + '">' + (started ? "Continue: " : "Start: ") + esc(next.id + " " + next.title) + "</a></div>" : "<p><b>You have finished every available lesson. More are coming.</b></p>") + "</div>";
+    var xp = totalXp(), li = levelFor(xp), cur = LEVELS[li], nxt = LEVELS[li + 1], s = streak();
+    var pct = nxt ? Math.round(((xp - cur.at) / (nxt.at - cur.at)) * 100) : 100;
+    var h = '<div class="top">' +
+      '<div class="chip flame' + (s ? "" : " off") + '"><span class="ico">🔥</span>' + s + '<small>day streak</small></div>' +
+      '<div class="chip"><span class="ico">⭐</span>Level ' + (li + 1) + " <small>" + esc(cur.title) + "</small></div>" +
+      '<div class="chip xpchip"><div class="bar"><i style="width:' + pct + '%"></i></div><small>' + xp + " XP" + (nxt ? " · " + (nxt.at - xp) + " to go" : "") + "</small></div></div>" +
+      '<div class="hero"><div><h1>' + (started ? "Welcome back!" : "Learn ROS 2 from zero") + "</h1><p>" +
+      (next ? (started ? "Next up: " : "Start with: ") + "<b>" + esc(next.id + " " + next.title) + "</b> (about " + next.minutes + " min)" : "You have finished every available lesson. More are coming.") +
+      "</p></div>" +
+      (next ? '<a class="btn go" href="#/' + next.id + '">' + (started ? "CONTINUE" : "START") + " →</a>" : "") + "</div>" +
+      '<h2 class="sec">Your path</h2><div class="cards">';
+    mods.forEach(function (m) {
+      var has = m.lessons && m.lessons.length, n = has ? m.lessons.filter(function (l) { return state.done[l.id]; }).length : 0;
+      var first = has ? (m.lessons.find(function (l) { return !state.done[l.id]; }) || m.lessons[0]) : null;
+      var p = has ? Math.round(n / m.lessons.length * 100) : 0, done = has && modDone(m);
+      var icon = done ? "⭐" : has ? "🚀" : "🔒";
+      var inner = '<div class="ring" style="--p:' + p + '"><span>' + icon + "</span></div><h3>" + esc(m.title) + '</h3><div class="sub">' +
+        (has ? n + " / " + m.lessons.length + " lessons" : "Coming soon") + "</div>";
+      h += has ? '<a class="card' + (done ? " complete" : "") + '" href="#/' + first.id + '">' + inner + "</a>"
+               : '<div class="card locked">' + inner + "</div>";
+    });
+    h += '</div><h2 class="sec">Trophy shelf</h2><div class="shelf">';
+    BADGES.forEach(function (b) {
+      var on = state.badges[b.id];
+      h += '<div class="trophy ' + (on ? "on" : "off") + '" title="' + esc(b.desc) + '"><i>' + (on ? b.icon : "🔒") + "</i>" + esc(b.name) + "</div>";
+    });
+    $("lesson").innerHTML = h + '</div><p class="about">Humble on Ubuntu 22.04 (WSL) · Python · simulation first. Wrong answers never cost XP, so experiment. Tell Claude when you are stuck and paste the error.</p>';
+    document.querySelector(".main").classList.add("home");
   }
 
   function renderLesson(id, keepScroll) {
     var idx = lessons.findIndex(function (l) { return l.id === id; });
     if (idx < 0) return renderWelcome();
     var l = lessons[idx];
-    currentId = id; renderNav(id); renderHud();
+    currentId = id; renderNav(id); renderHud(); document.querySelector(".main").classList.remove("home");
     var h = "<h1>" + esc(l.id + "  " + l.title) + '</h1><div class="meta">' + esc(l.mod.title) + " · about " + l.minutes + " min</div>";
     l.blocks.forEach(function (b, i) { h += renderBlock(l, b, i); });
     h += '<div class="notes"><h2>My notes</h2><textarea id="note" placeholder="Anything you want to remember or ask about later"></textarea></div>';
