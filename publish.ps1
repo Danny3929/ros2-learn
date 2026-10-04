@@ -29,7 +29,11 @@ for ($i = 0; $i -lt 24; $i++) {
   Start-Sleep 10
   try {
     $live = (Invoke-WebRequest "$url/sw.js?t=$(Get-Random)" -UseBasicParsing).Content
-    if ($live -match "ros2-learn-v$next") { "Live: $url (cache v$next)"; return }
+    if ($live -match "ros2-learn-v$next") {
+      "Live: $url (cache v$next). Verifying every file against local..."
+      & "$PSScriptRoot\check.ps1"
+      return
+    }
   } catch {}
 }
 "Pushed, but the site hasn't updated yet. Check again shortly."
