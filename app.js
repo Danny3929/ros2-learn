@@ -118,6 +118,7 @@
 
   function renderNav(activeId) {
     var html = "";
+    $("home").classList.toggle("active", !activeId);
     mods.forEach(function (m) {
       var has = m.lessons && m.lessons.length, n = has ? m.lessons.filter(function (l) { return state.done[l.id]; }).length : 0;
       html += '<div class="mod' + (has ? "" : " soon") + '"><h3>' + esc(m.title) +
@@ -221,7 +222,7 @@
     if (idx < 0) return renderWelcome();
     var l = lessons[idx];
     currentId = id; renderNav(id); renderHud(); document.querySelector(".main").classList.remove("home");
-    var h = "<h1>" + esc(l.id + "  " + l.title) + '</h1><div class="meta">' + esc(l.mod.title) + " · about " + l.minutes + " min</div>";
+    var h = '<a class="backhome" href="#/">← Home</a><h1>' + esc(l.id + "  " + l.title) + '</h1><div class="meta">' + esc(l.mod.title) + " · about " + l.minutes + " min</div>";
     l.blocks.forEach(function (b, i) { h += renderBlock(l, b, i); });
     h += '<div class="notes"><h2>My notes</h2><textarea id="note" placeholder="Anything you want to remember or ask about later"></textarea></div>';
     var prev = lessons[idx - 1], next = lessons[idx + 1], got = state.awards["l:" + id] !== undefined;
