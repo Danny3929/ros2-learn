@@ -1,5 +1,5 @@
 // Bump CACHE whenever any file changes so installed copies pick up the update.
-const CACHE = "ros2-learn-v7";
+const CACHE = "ros2-learn-v8";
 const FILES = [
   "./", "./index.html", "./style.css", "./app.js", "./manifest.json",
   "./content/m0_linux.js", "./content/m1_python.js", "./content/m2_turtlesim.js",

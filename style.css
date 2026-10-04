@@ -146,3 +146,15 @@ a.card:hover { transform: translateY(-3px); border-color: var(--accent); }
 .trophy.on { border-color: var(--gold); background: var(--warn-bg); }
 .about { color: var(--muted); font-size: 14px; max-width: 70ch; }
 @media (max-width: 800px) { .hero { padding: 22px; } .hero h1 { font-size: 24px; } .btn.go { width: 100%; text-align: center; } }
+
+/* ---------- Pointer feel: no jitter when a control moves under the cursor ---------- */
+.btn, button.quest, a.card { position: relative; cursor: pointer; }
+.btn::after, button.quest::after, a.card::after { content: ""; position: absolute; left: 0; right: 0; top: -4px; bottom: -8px; } /* hit area follows the lifted/pressed control */
+button.quest.got, .btn:disabled, .card.locked, .nav-item.planned { cursor: default; }
+.quiz button.opt { cursor: pointer; } .quiz button.opt:disabled { cursor: default; }
+.btn:hover:not(:active) { filter: brightness(1.07); }
+.btn.ghost:hover { border-color: var(--accent); filter: none; }
+button.quest.got:hover { filter: none; }
+.btn:focus-visible, button.quest:focus-visible, a.card:focus-visible, .quiz button.opt:focus-visible, .nav-item:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+.trophy, .badge { cursor: default; }
+@media (hover: none) { a.card:hover { transform: none; } }
