@@ -1,5 +1,5 @@
 // Bump CACHE whenever any file changes so installed copies pick up the update.
-const CACHE = "ros2-learn-v13";
+const CACHE = "ros2-learn-v14";
 const FILES = [
   "./", "./index.html", "./style.css", "./app.js", "./manifest.json",
   "./content/m0_linux.js", "./content/m1_python.js", "./content/m2_turtlesim.js",
@@ -19,11 +19,28 @@ self.addEventListener("activate", (e) => {
   );
 });
 
-// Cache first, fall back to the network. Google Fonts files are cached the
-// first time they load so the fonts also work offline.
+// Our own files: network first, so a visit always shows the newest version.
+// Each good response refreshes the saved copy, which is used only when offline.
+// Google Fonts files are cache first and saved the first time they load, so the
+// fonts also work offline.
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
-  const host = new URL(e.request.url).hostname;
+  const url = new URL(e.request.url);
+  if (url.origin === self.location.origin) {
+    e.respondWith(
+      fetch(e.request, { cache: "no-cache" })
+        .then((res) => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(e.request, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(e.request, { ignoreSearch: true }).then((hit) => hit || caches.match("./index.html")))
+    );
+    return;
+  }
+  const host = url.hostname;
   const isFont = host === "fonts.googleapis.com" || host === "fonts.gstatic.com";
   e.respondWith(
     caches.match(e.request).then((hit) => hit || fetch(e.request).then((res) => {
