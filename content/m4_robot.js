@@ -981,6 +981,371 @@ window.MODULES = window.MODULES || [];
             "Good next steps, when you want them: build <b>your own map</b> with SLAM (the robot drives around and the lidar draws the map as it goes), tune Nav2&apos;s costmaps and planner, add a camera and detect objects with a vision model such as YOLO, or run your code on a real robot."
           ]
         ]
+      },
+      {
+        "id": "4.9",
+        "title": "Mass, inertia and collision for a physics simulator",
+        "minutes": 35,
+        "blocks": [
+          [
+            "p",
+            "Your <code>mybot</code> from lessons 4.1 to 4.3 looks right in RViz, but RViz only <i>draws</i> it. To <b>simulate</b> the robot in Gazebo you must also tell the physics engine what it is made of. Two things are missing from your file:"
+          ],
+          [
+            "ul",
+            [
+              "<code>&lt;collision&gt;</code>: the shape used for <b>touching</b> things. It decides when the robot hits the floor or a wall. It is often a simpler shape than the <code>&lt;visual&gt;</code>, because collision maths is expensive. Here it is the same box, sphere and cylinders.",
+              "<code>&lt;inertial&gt;</code>: the <b>mass</b> and the <b>inertia</b>, a measure of how hard the part is to push and to spin. Without it the physics engine has nothing to work with."
+            ]
+          ],
+          [
+            "warn",
+            "Gazebo does <b>not</b> complain when these are missing. In a test, a copy of <code>mybot</code> without collision shapes and inertia was spawned with no error and no warning. It simply hung in mid-air exactly where it was placed, 0.1 m up, and never fell. If your robot floats in Gazebo, check for missing <code>&lt;inertial&gt;</code> blocks first."
+          ],
+          [
+            "h",
+            "Inertia without the maths"
+          ],
+          [
+            "p",
+            "Inertia is six numbers, but for simple shapes there are standard formulas. With mass <code>m</code>:"
+          ],
+          [
+            "ul",
+            [
+              "<b>Box</b> of size x, y, z: <code>ixx = m(y² + z²)/12</code>, <code>iyy = m(x² + z²)/12</code>, <code>izz = m(x² + y²)/12</code>.",
+              "<b>Cylinder</b> of radius r and length h (axis along z): <code>ixx = iyy = m(3r² + h²)/12</code>, <code>izz = m r²/2</code>.",
+              "<b>Sphere</b> of radius r: all three are <code>2 m r² / 5</code>."
+            ]
+          ],
+          [
+            "p",
+            "The other three numbers (<code>ixy</code>, <code>ixz</code>, <code>iyz</code>) are zero for these shapes. Rather than work the numbers by hand, you will write the formulas <b>once</b> as xacro macros (lesson 4.3) and let xacro compute them. The macros below are <code>box_inertia</code>, <code>cylinder_inertia</code> and <code>sphere_inertia</code>."
+          ],
+          [
+            "h",
+            "A simulation-ready robot file"
+          ],
+          [
+            "p",
+            "Make a new file instead of editing the old one, so your RViz version keeps working. It is long, but every piece is something you already know or is explained below."
+          ],
+          [
+            "cmd",
+            "cd ~/robot_practice && nano mybot_sim.xacro",
+            "Terminal 1 (Ubuntu)"
+          ],
+          [
+            "code",
+            "<?xml version=\"1.0\"?>\n<robot name=\"mybot\" xmlns:xacro=\"http://www.ros.org/wiki/xacro\">\n  <xacro:property name=\"wheel_radius\" value=\"0.06\"/>\n  <xacro:property name=\"wheel_width\" value=\"0.04\"/>\n\n  <material name=\"blue\"><color rgba=\"0.2 0.4 0.9 1\"/></material>\n  <material name=\"white\"><color rgba=\"1 1 1 1\"/></material>\n  <material name=\"black\"><color rgba=\"0.1 0.1 0.1 1\"/></material>\n\n  <!-- Inertia formulas for simple shapes (m = mass in kg) -->\n  <xacro:macro name=\"box_inertia\" params=\"m x y z\">\n    <inertial>\n      <mass value=\"${m}\"/>\n      <inertia ixx=\"${m * (y * y + z * z) / 12}\" ixy=\"0\" ixz=\"0\"\n               iyy=\"${m * (x * x + z * z) / 12}\" iyz=\"0\"\n               izz=\"${m * (x * x + y * y) / 12}\"/>\n    </inertial>\n  </xacro:macro>\n\n  <xacro:macro name=\"cylinder_inertia\" params=\"m r h\">\n    <inertial>\n      <origin rpy=\"${pi / 2} 0 0\"/>\n      <mass value=\"${m}\"/>\n      <inertia ixx=\"${m * (3 * r * r + h * h) / 12}\" ixy=\"0\" ixz=\"0\"\n               iyy=\"${m * (3 * r * r + h * h) / 12}\" iyz=\"0\"\n               izz=\"${m * r * r / 2}\"/>\n    </inertial>\n  </xacro:macro>\n\n  <xacro:macro name=\"sphere_inertia\" params=\"m r\">\n    <inertial>\n      <mass value=\"${m}\"/>\n      <inertia ixx=\"${2 * m * r * r / 5}\" ixy=\"0\" ixz=\"0\"\n               iyy=\"${2 * m * r * r / 5}\" iyz=\"0\"\n               izz=\"${2 * m * r * r / 5}\"/>\n    </inertial>\n  </xacro:macro>\n\n  <!-- Body -->\n  <link name=\"base_link\">\n    <visual>\n      <geometry><box size=\"0.4 0.2 0.1\"/></geometry>\n      <material name=\"blue\"/>\n    </visual>\n    <collision>\n      <geometry><box size=\"0.4 0.2 0.1\"/></geometry>\n    </collision>\n    <xacro:box_inertia m=\"2.0\" x=\"0.4\" y=\"0.2\" z=\"0.1\"/>\n  </link>\n\n  <!-- Head -->\n  <link name=\"head\">\n    <visual>\n      <geometry><sphere radius=\"0.07\"/></geometry>\n      <material name=\"white\"/>\n    </visual>\n    <collision>\n      <geometry><sphere radius=\"0.07\"/></geometry>\n    </collision>\n    <xacro:sphere_inertia m=\"0.2\" r=\"0.07\"/>\n  </link>\n  <joint name=\"head_joint\" type=\"fixed\">\n    <parent link=\"base_link\"/>\n    <child link=\"head\"/>\n    <origin xyz=\"0.1 0 0.12\"/>\n  </joint>\n\n  <!-- Wheels -->\n  <xacro:macro name=\"wheel\" params=\"name y\">\n    <link name=\"${name}_wheel\">\n      <visual>\n        <origin rpy=\"${pi / 2} 0 0\"/>\n        <geometry><cylinder radius=\"${wheel_radius}\" length=\"${wheel_width}\"/></geometry>\n        <material name=\"black\"/>\n      </visual>\n      <collision>\n        <origin rpy=\"${pi / 2} 0 0\"/>\n        <geometry><cylinder radius=\"${wheel_radius}\" length=\"${wheel_width}\"/></geometry>\n      </collision>\n      <xacro:cylinder_inertia m=\"0.3\" r=\"${wheel_radius}\" h=\"${wheel_width}\"/>\n    </link>\n    <joint name=\"${name}_wheel_joint\" type=\"continuous\">\n      <parent link=\"base_link\"/>\n      <child link=\"${name}_wheel\"/>\n      <origin xyz=\"-0.1 ${y} -0.02\"/>\n      <axis xyz=\"0 1 0\"/>\n    </joint>\n  </xacro:macro>\n\n  <xacro:wheel name=\"left\" y=\"0.12\"/>\n  <xacro:wheel name=\"right\" y=\"-0.12\"/>\n\n  <!-- A small ball at the front so the robot does not tip over -->\n  <link name=\"caster\">\n    <visual>\n      <geometry><sphere radius=\"0.03\"/></geometry>\n      <material name=\"black\"/>\n    </visual>\n    <collision>\n      <geometry><sphere radius=\"0.03\"/></geometry>\n    </collision>\n    <xacro:sphere_inertia m=\"0.1\" r=\"0.03\"/>\n  </link>\n  <joint name=\"caster_joint\" type=\"fixed\">\n    <parent link=\"base_link\"/>\n    <child link=\"caster\"/>\n    <origin xyz=\"0.15 0 -0.05\"/>\n  </joint>\n\n  <!-- Gazebo-only settings (colours, friction and the drive plugin) -->\n  <gazebo reference=\"base_link\"><material>Gazebo/Blue</material></gazebo>\n  <gazebo reference=\"head\"><material>Gazebo/White</material></gazebo>\n  <gazebo reference=\"left_wheel\">\n    <material>Gazebo/Black</material>\n    <mu1>1.0</mu1>\n    <mu2>1.0</mu2>\n  </gazebo>\n  <gazebo reference=\"right_wheel\">\n    <material>Gazebo/Black</material>\n    <mu1>1.0</mu1>\n    <mu2>1.0</mu2>\n  </gazebo>\n  <gazebo reference=\"caster\">\n    <material>Gazebo/Black</material>\n    <mu1>0.0</mu1>\n    <mu2>0.0</mu2>\n  </gazebo>\n\n  <gazebo>\n    <plugin name=\"diff_drive\" filename=\"libgazebo_ros_diff_drive.so\">\n      <update_rate>30</update_rate>\n      <left_joint>left_wheel_joint</left_joint>\n      <right_joint>right_wheel_joint</right_joint>\n      <wheel_separation>0.24</wheel_separation>\n      <wheel_diameter>${2 * wheel_radius}</wheel_diameter>\n      <max_wheel_torque>20</max_wheel_torque>\n      <max_wheel_acceleration>1.0</max_wheel_acceleration>\n      <command_topic>cmd_vel</command_topic>\n      <odometry_topic>odom</odometry_topic>\n      <odometry_frame>odom</odometry_frame>\n      <robot_base_frame>base_link</robot_base_frame>\n      <publish_odom>true</publish_odom>\n      <publish_odom_tf>true</publish_odom_tf>\n      <publish_wheel_tf>true</publish_wheel_tf>\n    </plugin>\n  </gazebo>\n</robot>",
+            "mybot_sim.xacro"
+          ],
+          [
+            "h",
+            "What changed"
+          ],
+          [
+            "ul",
+            [
+              "<b>Inertia macros</b> at the top. Each one takes the mass and the size and writes a full <code>&lt;inertial&gt;</code> block. The wheel macro rotates its inertia the same way as the wheel (<code>rpy=&quot;${pi / 2} 0 0&quot;</code>), so the cylinder&apos;s spin axis lines up with the joint axis.",
+              "Every link now has <b>collision</b> and <b>inertial</b> parts. Masses are guesses that are about right: 2 kg body, 0.2 kg head, 0.3 kg for each wheel and 0.1 kg for the ball.",
+              "A new <b>caster</b> link: a small ball at the front. A robot standing on only two wheels would just tip forward or backward, so a third point of contact holds it up. It is a plain fixed joint, so the ball does not roll as a wheel would.",
+              "<b>&lt;gazebo reference=&quot;...&quot;&gt;</b> blocks hold settings that only Gazebo reads. RViz and <code>check_urdf</code> ignore them. Here they set the <b>colours</b> (Gazebo has its own colour names), and the <b>friction</b> of the wheels and the caster. <code>mu1</code> and <code>mu2</code> are friction coefficients: the wheels grip (1.0) and the ball slides freely (0.0).",
+              "A <b>plugin</b> at the bottom, the one part that makes the robot <i>move</i>. It is described next."
+            ]
+          ],
+          [
+            "h",
+            "The drive plugin"
+          ],
+          [
+            "p",
+            "Gazebo does not know your robot has wheels that should respond to <code>/cmd_vel</code>. A <b>plugin</b>, a piece of code loaded into the simulator, does that job. <code>libgazebo_ros_diff_drive.so</code> implements a <b>differential drive</b> robot: two wheels that turn at different speeds to move and steer. Its settings:"
+          ],
+          [
+            "ul",
+            [
+              "<code>left_joint</code> and <code>right_joint</code>: which of your joints are the drive wheels (the names from the file).",
+              "<code>wheel_separation</code> (0.24) and <code>wheel_diameter</code> (0.12): the geometry, which must match the wheels you built. The distance between the two wheels is 0.12 + 0.12 = 0.24 m. The diameter uses <code>${2 * wheel_radius}</code>, an xacro calculation.",
+              "<code>command_topic</code> (<code>cmd_vel</code>): the topic it <b>listens</b> to for <code>Twist</code> commands, the same one you used for the TurtleBot3.",
+              "<code>odometry_topic</code>, <code>odometry_frame</code> and <code>robot_base_frame</code>: where it <b>publishes</b> the odometry (<code>/odom</code>), and between which two frames.",
+              "<code>publish_odom_tf</code> and <code>publish_wheel_tf</code>: also publish the <code>odom</code> to <code>base_link</code> transform and the wheel frames, so TF2 (lesson 4.4) works."
+            ]
+          ],
+          [
+            "p",
+            "Check that the file is still valid and has the tree you expect:"
+          ],
+          [
+            "cmd",
+            "xacro mybot_sim.xacro > mybot_sim.urdf",
+            "Terminal 1 (Ubuntu)"
+          ],
+          [
+            "cmd",
+            "check_urdf mybot_sim.urdf",
+            "Terminal 1 (Ubuntu)"
+          ],
+          [
+            "out",
+            "robot name is: mybot\n---------- Successfully Parsed XML ---------------\nroot Link: base_link has 4 child(ren)\n    child(1):  caster\n    child(2):  head\n    child(3):  left_wheel\n    child(4):  right_wheel"
+          ],
+          [
+            "p",
+            "There is one more child than before: the caster. The file also still opens in RViz with <code>ros2 launch urdf_tutorial display.launch.py model:=$HOME/robot_practice/mybot_sim.xacro</code>. You may see a warning from <code>robot_state_publisher</code> saying the root link has an inertia and that KDL does not support that. It is a known limitation of one ROS library, and the robot works anyway, so you can ignore it."
+          ],
+          [
+            "try",
+            "Work out the inertia of the body by hand with the box formulas: m = 2.0, x = 0.4, y = 0.2, z = 0.1. Then change the body mass in <code>mybot_sim.xacro</code> to 4.0, run <code>xacro mybot_sim.xacro</code> and find the new <code>ixx</code> in the output. Does it match your calculation?"
+          ],
+          [
+            "quiz",
+            {
+              "q": "Which element gives a link its <b>mass</b>, and which gives the <b>shape used for touching</b>?",
+              "options": [
+                "&lt;visual&gt; for both",
+                "&lt;inertial&gt; for mass, &lt;collision&gt; for the touching shape",
+                "&lt;collision&gt; for mass, &lt;inertial&gt; for the touching shape",
+                "&lt;gazebo&gt; for both"
+              ],
+              "answer": 1,
+              "why": "<code>&lt;inertial&gt;</code> holds the mass and inertia. <code>&lt;collision&gt;</code> holds the geometry the physics engine uses for contact. <code>&lt;visual&gt;</code> is only for drawing."
+            }
+          ],
+          [
+            "quiz",
+            {
+              "q": "A robot&apos;s URDF has no <code>&lt;inertial&gt;</code> or <code>&lt;collision&gt;</code> elements. What happens when you spawn it in Gazebo?",
+              "options": [
+                "Gazebo refuses to spawn it and prints an error",
+                "It spawns without any error, but hangs in mid-air and never falls",
+                "It falls through the floor and disappears",
+                "It drives by itself"
+              ],
+              "answer": 1,
+              "why": "Gazebo gives no warning. With no mass and no collision shape the robot is not part of the physics, so it stays where it was spawned."
+            }
+          ]
+        ]
+      },
+      {
+        "id": "4.10",
+        "title": "Your own robot in Gazebo",
+        "minutes": 40,
+        "blocks": [
+          [
+            "p",
+            "Time to bring <code>mybot</code> to life. In lesson 4.5 you launched a ready-made TurtleBot3. Now you will launch <b>your own robot</b> and drive it with the same commands. You will need three things: Gazebo itself, a node that publishes the robot&apos;s description, and a node that <b>spawns</b> the robot into the world."
+          ],
+          [
+            "h",
+            "Why a launch file?"
+          ],
+          [
+            "p",
+            "You could start all three by hand, but there is a trap. The robot description is an XML text of several hundred lines, and the quick way of passing it to a node on the command line (<code>-p robot_description:=&quot;$(xacro ...)&quot;</code>) hands it to a parser that reads the text as <b>YAML</b>. A single <i>colon followed by a space</i> in an XML comment (for example <code>&lt;!-- Settings: colours --&gt;</code>) is enough to break it, and <code>robot_state_publisher</code> crashes with <code>Couldn&apos;t parse parameter override rule</code>. A launch file avoids the problem, because it passes the value as plain <b>text</b>. It also starts everything with one command."
+          ],
+          [
+            "cmd",
+            "cd ~/robot_practice && nano mybot_gazebo.launch.py",
+            "Terminal 1 (Ubuntu)"
+          ],
+          [
+            "code",
+            "import os\n\nfrom ament_index_python.packages import get_package_share_directory\nfrom launch import LaunchDescription\nfrom launch.actions import IncludeLaunchDescription\nfrom launch.launch_description_sources import PythonLaunchDescriptionSource\nfrom launch.substitutions import Command\nfrom launch_ros.actions import Node\nfrom launch_ros.parameter_descriptions import ParameterValue\n\nHERE = os.path.dirname(os.path.abspath(__file__))\n\n\ndef generate_launch_description():\n    gazebo = IncludeLaunchDescription(\n        PythonLaunchDescriptionSource(\n            os.path.join(get_package_share_directory(\"gazebo_ros\"), \"launch\", \"gazebo.launch.py\")\n        )\n    )\n\n    robot_description = ParameterValue(\n        Command([\"xacro \", os.path.join(HERE, \"mybot_sim.xacro\")]), value_type=str\n    )\n    state_publisher = Node(\n        package=\"robot_state_publisher\",\n        executable=\"robot_state_publisher\",\n        parameters=[{\"robot_description\": robot_description, \"use_sim_time\": True}],\n    )\n\n    spawn = Node(\n        package=\"gazebo_ros\",\n        executable=\"spawn_entity.py\",\n        arguments=[\"-topic\", \"robot_description\", \"-entity\", \"mybot\", \"-z\", \"0.1\"],\n        output=\"screen\",\n    )\n\n    return LaunchDescription([gazebo, state_publisher, spawn])",
+            "mybot_gazebo.launch.py"
+          ],
+          [
+            "p",
+            "This is the launch-file pattern from lesson 3.4, with some new pieces:"
+          ],
+          [
+            "ul",
+            [
+              "<code>HERE = os.path.dirname(os.path.abspath(__file__))</code> is the folder this file lives in, so the launch file finds <code>mybot_sim.xacro</code> next to it wherever you run it from.",
+              "<code>IncludeLaunchDescription(...)</code> <b>runs another launch file</b>, here the one in the <code>gazebo_ros</code> package that starts the simulator. <code>get_package_share_directory</code> finds where that package is installed.",
+              "<code>Command([&quot;xacro &quot;, path])</code> is a <b>substitution</b>: a value that is worked out <i>when the launch starts</i>, here by running the <code>xacro</code> command and taking its output. Note the space after <code>xacro</code> inside the quotes.",
+              "<code>ParameterValue(..., value_type=str)</code> says &quot;this is a plain string, do not try to read it as anything else&quot;. This is what dodges the YAML trap above.",
+              "<code>robot_state_publisher</code> gets the description and <code>use_sim_time: True</code> (it must use Gazebo&apos;s clock, as in lesson 5.1). It publishes the description on the <code>/robot_description</code> topic.",
+              "<code>spawn_entity.py</code> reads that topic (<code>-topic robot_description</code>), and creates a model called <code>mybot</code> (<code>-entity mybot</code>) <b>0.1 m above the floor</b> (<code>-z 0.1</code>), so it settles gently onto its wheels."
+            ]
+          ],
+          [
+            "h",
+            "Launch it"
+          ],
+          [
+            "p",
+            "Gazebo needs the same one-time setup as in lesson 4.5 (software rendering, and the <code>ground_plane</code> and <code>sun</code> models in <code>~/.gazebo/models</code>). Then:"
+          ],
+          [
+            "cmd",
+            "ros2 launch mybot_gazebo.launch.py",
+            "Terminal 1 (Ubuntu)"
+          ],
+          [
+            "out",
+            "[spawn_entity.py-4] [INFO] [...] [spawn_entity]: Spawn status: SpawnEntity: Successfully spawned entity [mybot]"
+          ],
+          [
+            "p",
+            "A Gazebo window opens with an empty grey floor and your <b>blue body with a white head and black wheels</b> standing on it. The terminal also shows the drive plugin starting up and reading your settings:"
+          ],
+          [
+            "out",
+            "[gzserver-1] [INFO] [...] [diff_drive]: Wheel pair 1 separation set to [0.240000m]\n[gzserver-1] [INFO] [...] [diff_drive]: Wheel pair 1 diameter set to [0.120000m]\n[gzserver-1] [INFO] [...] [diff_drive]: Subscribed to [/cmd_vel]\n[gzserver-1] [INFO] [...] [diff_drive]: Advertise odometry on [/odom]\n[gzserver-1] [INFO] [...] [diff_drive]: Publishing odom transforms between [odom] and [base_link]\n[gzserver-1] [INFO] [...] [diff_drive]: Publishing wheel transforms between [base_link], [left_wheel_joint] and [right_wheel_joint]"
+          ],
+          [
+            "p",
+            "Those are exactly the numbers you wrote in the file. Now look at what your robot offers to ROS, from <b>terminal 2</b>:"
+          ],
+          [
+            "cmd",
+            "ros2 topic list",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "out",
+            "/cmd_vel\n/joint_states\n/odom\n/robot_description\n/tf\n/tf_static"
+          ],
+          [
+            "ul",
+            [
+              "<code>/cmd_vel</code>: send velocity commands here.",
+              "<code>/odom</code>: where the robot thinks it is.",
+              "<code>/joint_states</code> and <code>/tf</code>: the wheel angles and the frames.",
+              "<code>/robot_description</code>: the XML, so any node (RViz, for instance) can read it."
+            ]
+          ],
+          [
+            "note",
+            "There is no <code>/scan</code>, because <code>mybot</code> has no lidar. The robot has only what you put in its file."
+          ],
+          [
+            "warn",
+            "The first launch can take a minute or more. If the log shows <code>Service /spawn_entity unavailable</code> or the Gazebo window stays black, a leftover <code>gzserver</code> from an earlier run is usually the cause (lesson 4.5). Close everything, check that <code>pgrep gzserver</code> prints nothing, and launch again."
+          ],
+          [
+            "h",
+            "Drive it"
+          ],
+          [
+            "cmd",
+            "ros2 topic echo --once --field pose.pose.position /odom",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "out",
+            "x: 0.0011892337373105022\ny: 8.674532217482978e-05\nz: 0.08000003263020337\n---"
+          ],
+          [
+            "p",
+            "The robot is at the origin. Note <code>z: 0.08</code>: the centre of the body is 8 cm above the floor, which is exactly what you designed (wheel radius 0.06 plus 0.02 below the body centre), so your wheels really are carrying the robot. Now drive forward:"
+          ],
+          [
+            "cmd",
+            "ros2 topic pub --times 15 -r 5 /cmd_vel geometry_msgs/msg/Twist \"{linear: {x: 0.2}}\"",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "cmd",
+            "ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist \"{}\"",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "cmd",
+            "ros2 topic echo --once --field pose.pose.position /odom",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "out",
+            "x: 0.8924364334996211\ny: -0.0003467613860239741\nz: 0.08000002415991204\n---"
+          ],
+          [
+            "p",
+            "It rolled forward in a straight line (<code>y</code> hardly changed), and it stayed level (<code>z</code> is still 0.08). Your exact <code>x</code> will differ, because the simulation does not run in perfect real time. Now turn on the spot:"
+          ],
+          [
+            "cmd",
+            "ros2 topic pub --times 15 -r 5 /cmd_vel geometry_msgs/msg/Twist \"{angular: {z: 0.5}}\"",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "cmd",
+            "ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist \"{}\"",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "cmd",
+            "ros2 topic echo --once --field pose.pose.orientation /odom",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "out",
+            "x: -2.0648153447698785e-07\ny: 2.9853589151005396e-08\nz: 0.7898948293674187\nw: 0.6132423326374108\n---"
+          ],
+          [
+            "p",
+            "The orientation is a <b>quaternion</b>, four numbers. Only <code>z</code> and <code>w</code> are significant because the robot turned only around the vertical axis. Quaternions get their own lesson (7.5), but you can already see that <code>z</code> grew from 0 to 0.79 as the robot turned, about 100 degrees in this run."
+          ],
+          [
+            "h",
+            "Your own Python works on it"
+          ],
+          [
+            "p",
+            "The script you wrote in lesson 4.6 needs no change, because <code>mybot</code> listens to the same topic:"
+          ],
+          [
+            "cmd",
+            "python3 drive_forward.py",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "out",
+            "[INFO] [...] [drive_forward]: Finished: the robot has been told to stop"
+          ],
+          [
+            "p",
+            "On <code>mybot</code> it moved about 0.57 m (the script commands 0.2 m/s for 3 seconds). This is the point of ROS: the software above the robot does not care what is underneath."
+          ],
+          [
+            "warn",
+            "Close Gazebo with <code>Ctrl+C</code> and check that <code>pgrep gzserver</code> prints nothing, as in lessons 4.5 and 4.7."
+          ],
+          [
+            "try",
+            "Make <code>mybot</code> drive a rough square with your own Python: forward for 3 seconds, turn left for about 3 seconds at 0.5 rad/s, repeat four times. Reuse the timer pattern from <code>drive_forward.py</code>. Then change a number in <code>mybot_sim.xacro</code> (the wheel radius, for instance), relaunch, and see how the robot&apos;s behaviour changes."
+          ],
+          [
+            "quiz",
+            {
+              "q": "Why does the launch file use <code>ParameterValue(..., value_type=str)</code> for the robot description?",
+              "options": [
+                "To make Gazebo run faster",
+                "To pass the long XML text as a plain string, so it is not misread as YAML",
+                "To rename the robot",
+                "To change the colours"
+              ],
+              "answer": 1,
+              "why": "Passing the XML on the command line makes it get parsed as YAML, which breaks on things like a colon followed by a space in a comment. A launch file with a string parameter value avoids that."
+            }
+          ],
+          [
+            "quiz",
+            {
+              "q": "Which part of <code>mybot_sim.xacro</code> makes the robot respond to <code>/cmd_vel</code> in Gazebo?",
+              "options": [
+                "The head link",
+                "The <code>&lt;visual&gt;</code> elements",
+                "The diff_drive plugin inside a <code>&lt;gazebo&gt;</code> block",
+                "The caster"
+              ],
+              "answer": 2,
+              "why": "The plugin <code>libgazebo_ros_diff_drive.so</code> subscribes to <code>cmd_vel</code>, turns the two wheel joints, and publishes <code>/odom</code>."
+            }
+          ]
+        ]
       }
     ]
   });
