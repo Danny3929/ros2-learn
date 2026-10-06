@@ -51,6 +51,7 @@
     { id: "m2", icon: "🐢", name: "Turtle driver", desc: "Complete the turtlesim module", test: function () { return mods.some(function (m) { return m.order === 2 && modDone(m); }); } },
     { id: "m3", icon: "📦", name: "Package builder", desc: "Complete the workspaces and packages module", test: function () { return mods.some(function (m) { return m.order === 3 && modDone(m); }); } },
     { id: "m4", icon: "🤖", name: "Robot builder", desc: "Complete the robot simulation module", test: function () { return mods.some(function (m) { return m.order === 4 && modDone(m); }); } },
+    { id: "m5", icon: "🗺️", name: "Cartographer", desc: "Complete the mapping module", test: function () { return mods.some(function (m) { return m.order === 5 && modDone(m); }); } },
     { id: "lv4", icon: "⭐", name: "Rising star", desc: "Reach level 4", test: function () { return levelFor(totalXp()) >= 3; } }
   ];
 
