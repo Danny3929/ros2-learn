@@ -109,7 +109,6 @@ window.MODULES = window.MODULES || [];
   window.MODULES.push({
     order: 4,
     title: "4 · Robot simulation",
-    planned: ["Drive and sense with Python", "Nav2 autonomous navigation", "Capstone: your own goal sender"],
     lessons: [
       {
         id: "4.1", title: "Describing a robot (URDF)", minutes: 20,
@@ -367,6 +366,620 @@ window.MODULES = window.MODULES || [];
             answer: 2,
             why: "<code>/cmd_vel</code> (command velocity) is the robot&apos;s input. <code>/scan</code>, <code>/odom</code> and <code>/imu</code> are outputs that it publishes."
           }]
+        ]
+      },
+      {
+        "id": "4.6",
+        "title": "Drive and sense with Python",
+        "minutes": 40,
+        "blocks": [
+          [
+            "p",
+            "So far you have driven the robot with typed commands. Real robots are driven by <b>programs</b>: code that reads sensors and decides what to do. In this lesson you write three small nodes. The first drives, the second reads the lidar, and the third combines them into a robot that <b>stops before it hits a wall</b>. Everything you learned about nodes, publishers and subscribers in Module 2 applies unchanged."
+          ],
+          [
+            "h",
+            "Start the world"
+          ],
+          [
+            "p",
+            "In <b>terminal 1</b>, launch the TurtleBot3 world with its pillars and walls. It takes a minute or more to load."
+          ],
+          [
+            "cmd",
+            "ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py",
+            "Terminal 1 (Ubuntu)"
+          ],
+          [
+            "p",
+            "You write and run your scripts in <b>terminal 2</b>, inside your practice folder:"
+          ],
+          [
+            "cmd",
+            "mkdir -p ~/robot_practice && cd ~/robot_practice",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "h",
+            "Script 1: drive forward, then stop"
+          ],
+          [
+            "cmd",
+            "nano drive_forward.py",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "code",
+            "import rclpy\nfrom rclpy.node import Node\nfrom geometry_msgs.msg import Twist\n\n\nclass DriveForward(Node):\n    def __init__(self):\n        super().__init__(\"drive_forward\")\n        self.publisher = self.create_publisher(Twist, \"/cmd_vel\", 10)\n        self.timer = self.create_timer(0.1, self.tick)\n        self.ticks = 0\n        self.done = False\n\n    def tick(self):\n        msg = Twist()\n        if self.ticks < 30:\n            msg.linear.x = 0.2\n        self.publisher.publish(msg)\n        self.ticks += 1\n        if self.ticks == 40:\n            self.get_logger().info(\"Finished: the robot has been told to stop\")\n            self.done = True\n\n\ndef main():\n    rclpy.init()\n    node = DriveForward()\n    try:\n        while rclpy.ok() and not node.done:\n            rclpy.spin_once(node, timeout_sec=0.1)\n    except KeyboardInterrupt:\n        pass\n    finally:\n        if rclpy.ok():\n            node.publisher.publish(Twist())\n        node.destroy_node()\n        if rclpy.ok():\n            rclpy.shutdown()\n\n\nif __name__ == \"__main__\":\n    main()",
+            "drive_forward.py"
+          ],
+          [
+            "p",
+            "This is the publisher pattern from lesson 2.6, with three changes:"
+          ],
+          [
+            "ul",
+            [
+              "The topic is <code>/cmd_vel</code> and the timer runs <b>10 times a second</b> (every 0.1 s). A robot expects a steady stream of commands, not a single one.",
+              "<code>self.ticks</code> counts the timer calls. For the first 30 ticks (3 seconds) the command is <code>linear.x = 0.2</code>, so the robot covers about <code>0.2 × 3 = 0.6</code> metres. After that the message is an empty <code>Twist()</code>, which is all zeros: <b>stop</b>.",
+              "Instead of <code>rclpy.spin(node)</code>, the loop <code>while rclpy.ok() and not node.done</code> with <code>spin_once</code> lets the node <b>finish by itself</b> after 40 ticks. In <code>finally</code>, a last zero <code>Twist</code> is sent as a safety net. The <code>if rclpy.ok()</code> check matters: after Ctrl+C, ROS has already shut down and publishing would crash."
+            ]
+          ],
+          [
+            "cmd",
+            "python3 drive_forward.py",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "out",
+            "[INFO] [1791286104.427509548] [drive_forward]: Finished: the robot has been told to stop"
+          ],
+          [
+            "p",
+            "In the Gazebo window the robot rolls forward and stops. Check how far it went:"
+          ],
+          [
+            "cmd",
+            "ros2 topic echo --once --field pose.pose.position /odom",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "out",
+            "x: -1.4083368624960655\ny: -0.5000009243039826\n... (a z value and a --- line follow)"
+          ],
+          [
+            "p",
+            "In this world the robot starts at <code>x = -2.0</code>, so it moved about 0.59 m, almost exactly the 0.6 m you calculated. <code>y</code> did not change, so it drove straight."
+          ],
+          [
+            "h",
+            "Script 2: read the lidar"
+          ],
+          [
+            "cmd",
+            "nano lidar_reader.py",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "code",
+            "import math\n\nimport rclpy\nfrom rclpy.node import Node\nfrom rclpy.qos import qos_profile_sensor_data\nfrom sensor_msgs.msg import LaserScan\n\n\nclass LidarReader(Node):\n    def __init__(self):\n        super().__init__(\"lidar_reader\")\n        self.create_subscription(LaserScan, \"/scan\", self.on_scan, qos_profile_sensor_data)\n\n    def on_scan(self, msg):\n        front = list(msg.ranges[:15]) + list(msg.ranges[-15:])\n        seen = [r for r in front if math.isfinite(r) and r > msg.range_min]\n        if seen:\n            self.get_logger().info(f\"Nearest thing ahead: {min(seen):.2f} m\", throttle_duration_sec=1.0)\n        else:\n            self.get_logger().info(\"Nothing ahead within range\", throttle_duration_sec=1.0)\n\n\ndef main():\n    rclpy.init()\n    node = LidarReader()\n    try:\n        rclpy.spin(node)\n    except KeyboardInterrupt:\n        pass\n    finally:\n        node.destroy_node()\n        if rclpy.ok():\n            rclpy.shutdown()\n\n\nif __name__ == \"__main__\":\n    main()",
+            "lidar_reader.py"
+          ],
+          [
+            "p",
+            "This is the subscriber pattern from lesson 2.7. The new parts:"
+          ],
+          [
+            "ul",
+            [
+              "<code>msg.ranges</code> is a list of 360 distances, one per degree. Beam <b>0 points straight ahead</b> and the numbers rise counter-clockwise, so beams 345 to 359 are just to the right of ahead.",
+              "<code>msg.ranges[:15]</code> takes the <b>first</b> 15 beams (0 to 14 degrees, left of centre) and <code>msg.ranges[-15:]</code> the <b>last</b> 15 (the 15 degrees to the right). Together they form a 30-degree cone straight ahead.",
+              "<code>math.isfinite(r)</code> throws away the <code>inf</code> readings that mean &quot;nothing within range&quot;, and <code>r &gt; msg.range_min</code> throws away readings too close to be trustworthy. What remains are real obstacles.",
+              "<code>min(seen)</code> is the distance to the closest one. The <code>f&quot;...{min(seen):.2f}...&quot;</code> string puts it in the log with 2 decimals.",
+              "<code>throttle_duration_sec=1.0</code> limits the log to one line per second, otherwise the 5 scans a second would flood the terminal.",
+              "<code>qos_profile_sensor_data</code> replaces the usual <code>10</code>. It is the <b>QoS</b> (quality of service) setting that real sensors use: &quot;newest data matters, don't resend old data&quot;."
+            ]
+          ],
+          [
+            "warn",
+            "Use <code>qos_profile_sensor_data</code> for every sensor topic. In the simulator a plain <code>10</code> happens to work too (I tested both), but on a <b>real robot</b> the same code with <code>10</code> silently receives <i>nothing</i>: no error, just an empty callback. It is one of the most common ROS 2 bugs."
+          ],
+          [
+            "cmd",
+            "python3 lidar_reader.py",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "out",
+            "[INFO] [1791286090.462808512] [lidar_reader]: Nearest thing ahead: 1.93 m\n[INFO] [1791286091.467734489] [lidar_reader]: Nearest thing ahead: 1.95 m\n[INFO] [1791286092.478523329] [lidar_reader]: Nearest thing ahead: 1.94 m"
+          ],
+          [
+            "p",
+            "The numbers wobble by a few millimetres because the simulated lidar has a little noise, just like a real one. Stop it with <code>Ctrl+C</code>."
+          ],
+          [
+            "h",
+            "Script 3: stop before the wall"
+          ],
+          [
+            "p",
+            "Now join the two. The robot drives forward slowly and stops when something is closer than 0.5 m. Notice how the code is split in two: <code>on_scan</code> only <b>senses</b> (it updates the <code>blocked</code> flag) and <code>drive</code> only <b>acts</b> (it publishes a command based on that flag). Keeping sensing and acting apart makes robot code much easier to debug."
+          ],
+          [
+            "cmd",
+            "nano obstacle_stop.py",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "code",
+            "import math\n\nimport rclpy\nfrom rclpy.node import Node\nfrom rclpy.qos import qos_profile_sensor_data\nfrom geometry_msgs.msg import Twist\nfrom sensor_msgs.msg import LaserScan\n\nSTOP_DISTANCE = 0.5\nSPEED = 0.15\n\n\nclass ObstacleStop(Node):\n    def __init__(self):\n        super().__init__(\"obstacle_stop\")\n        self.publisher = self.create_publisher(Twist, \"/cmd_vel\", 10)\n        self.create_subscription(LaserScan, \"/scan\", self.on_scan, qos_profile_sensor_data)\n        self.create_timer(0.1, self.drive)\n        self.blocked = False\n\n    def on_scan(self, msg):\n        front = list(msg.ranges[:15]) + list(msg.ranges[-15:])\n        seen = [r for r in front if math.isfinite(r) and r > msg.range_min]\n        blocked = bool(seen) and min(seen) < STOP_DISTANCE\n        if blocked and not self.blocked:\n            self.get_logger().info(f\"Obstacle at {min(seen):.2f} m, stopping\")\n        self.blocked = blocked\n\n    def drive(self):\n        msg = Twist()\n        if not self.blocked:\n            msg.linear.x = SPEED\n        self.publisher.publish(msg)\n\n\ndef main():\n    rclpy.init()\n    node = ObstacleStop()\n    try:\n        rclpy.spin(node)\n    except KeyboardInterrupt:\n        pass\n    finally:\n        if rclpy.ok():\n            node.publisher.publish(Twist())\n        node.destroy_node()\n        if rclpy.ok():\n            rclpy.shutdown()\n\n\nif __name__ == \"__main__\":\n    main()",
+            "obstacle_stop.py"
+          ],
+          [
+            "cmd",
+            "python3 obstacle_stop.py",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "out",
+            "[INFO] [1791286287.890910303] [obstacle_stop]: Obstacle at 0.49 m, stopping"
+          ],
+          [
+            "p",
+            "The robot crawls forward (slowly, at 0.15 m/s) and stops in front of the wall after about half a minute. You may see the stop message twice: the robot coasts a few millimetres and the distance crosses the 0.5 m line again. Press <code>Ctrl+C</code> when it has stopped. It sends a final zero <code>Twist</code> and exits cleanly."
+          ],
+          [
+            "note",
+            "You can see the robot did stop: run <code>ros2 topic echo --once --field pose.pose.position /odom</code> twice a couple of seconds apart. The <code>x</code> values match to about six decimal places."
+          ],
+          [
+            "warn",
+            "Close Gazebo with <code>Ctrl+C</code> in terminal 1 when you are done, then check that <code>pgrep gzserver</code> prints nothing (lesson 4.5). The robot is now parked at the wall, so a new launch is also the quickest way to put it back at the start."
+          ],
+          [
+            "try",
+            "In <code>obstacle_stop.py</code>, change <code>STOP_DISTANCE</code> to <code>1.0</code> and relaunch the world. Does the robot stop earlier? Then try <code>SPEED = 0.3</code>. Does it still stop at the right place, or does it overshoot? Why might a faster robot need a bigger stopping distance?"
+          ],
+          [
+            "quiz",
+            {
+              "q": "A lidar reading in <code>msg.ranges</code> is <code>inf</code>. What does that mean?",
+              "options": [
+                "The lidar is broken",
+                "Nothing was detected within the lidar's maximum range in that direction",
+                "The obstacle is exactly touching the robot",
+                "The robot is moving too fast"
+              ],
+              "answer": 1,
+              "why": "<code>inf</code> means &quot;no echo within <code>range_max</code>&quot; (3.5 m for this lidar). That is why the scripts filter with <code>math.isfinite</code> before taking the minimum."
+            }
+          ],
+          [
+            "quiz",
+            {
+              "q": "Why does <code>drive_forward.py</code> publish an empty <code>Twist()</code> at the end?",
+              "options": [
+                "To reset the simulator",
+                "A zero Twist is the command &quot;stop&quot;. Without it the robot might keep following its last speed",
+                "To delete the topic",
+                "Python requires it"
+              ],
+              "answer": 1,
+              "why": "A robot does what its last command said. Always finish a movement program with an explicit zero velocity."
+            }
+          ]
+        ]
+      },
+      {
+        "id": "4.7",
+        "title": "Autonomous navigation with Nav2",
+        "minutes": 45,
+        "blocks": [
+          [
+            "p",
+            "Until now you told the robot exactly how to move. <b>Nav2</b> (Navigation 2) is the standard ROS 2 system that lets you say only <b>where</b> to go. You give it a goal on a map, and it works out a route, drives it, and steers around anything in the way, including things that were not on the map. It is the biggest piece of software you will use in this course, so first meet its parts."
+          ],
+          [
+            "ul",
+            [
+              "<b>map_server</b>: loads a saved map, a picture where white is free floor and black is wall.",
+              "<b>AMCL</b> (localization): answers &quot;where am I on the map?&quot; by matching the lidar scan against the map. It also publishes the <code>map</code> to <code>odom</code> transform you met in lesson 4.4.",
+              "<b>costmaps</b>: grids that mark how risky each spot is. Obstacles are &quot;inflated&quot; so the robot keeps a safe distance. There is a <b>global</b> one (the whole map) and a <b>local</b> one (the area around the robot, updated live from the lidar).",
+              "<b>planner_server</b>: draws the best path from here to the goal across the global costmap.",
+              "<b>controller_server</b>: follows that path by publishing velocities on <code>/cmd_vel</code> (the same topic you drove by hand), dodging obstacles seen in the local costmap.",
+              "<b>bt_navigator</b>: the manager. It runs a behaviour tree that calls the planner and controller, and tries recovery moves (back up, spin) when the robot gets stuck."
+            ]
+          ],
+          [
+            "note",
+            "The TF chain from lesson 4.4 now makes sense: <code>map</code> to <code>odom</code> is published by AMCL, and <code>odom</code> to <code>base_link</code> comes from the wheel odometry. TF2 multiplies the two so everything can be expressed on the map."
+          ],
+          [
+            "h",
+            "One-time setup"
+          ],
+          [
+            "p",
+            "Nav2&apos;s launch file loads the TurtleBot3 world by model name, and Gazebo needs to know where those models live. Without this, Gazebo hangs looking for them online, and you see <code>Spawn service failed</code> after a long wait (the same kind of stall as in lesson 4.5). Add the folder to <code>~/.bashrc</code> <b>once</b>, then open a new terminal:"
+          ],
+          [
+            "cmd",
+            "echo 'export GAZEBO_MODEL_PATH=$GAZEBO_MODEL_PATH:/opt/ros/humble/share/turtlebot3_gazebo/models' >> ~/.bashrc"
+          ],
+          [
+            "note",
+            "Nav2&apos;s launch file spawns its own TurtleBot3 (the &quot;waffle&quot; type), whatever <code>TURTLEBOT3_MODEL</code> says. You do not need to change that setting."
+          ],
+          [
+            "p",
+            "Before launching, make sure no earlier Gazebo is still running. This must print nothing:"
+          ],
+          [
+            "cmd",
+            "pgrep gzserver",
+            "Terminal 1 (Ubuntu)"
+          ],
+          [
+            "h",
+            "Launch Nav2 with the simulator"
+          ],
+          [
+            "cmd",
+            "ros2 launch nav2_bringup tb3_simulation_launch.py headless:=True",
+            "Terminal 1 (Ubuntu)"
+          ],
+          [
+            "p",
+            "<code>headless:=True</code> means &quot;do not open the Gazebo window&quot;. The simulation still runs, but you skip the heaviest part of the picture, which matters with software rendering. You will watch everything in <b>RViz</b> instead, which opens by itself."
+          ],
+          [
+            "warn",
+            "Be patient. Nav2 plus the simulator usually needs about a minute to come up (the first launch after restarting your PC can take longer), and your PC will be working hard. While it loads, RViz shows a red <i>Global Status: Error</i>. That is normal until you set the initial pose in step 1."
+          ],
+          [
+            "h",
+            "Step 1: tell the robot where it is"
+          ],
+          [
+            "p",
+            "Nav2 does not know where the robot starts. Until you tell it, the <b>Navigation 2</b> panel at the bottom left of RViz says <i>inactive</i>. The TurtleBot starts at <code>x = -2.0, y = -0.5</code>, pointing along the <code>x</code> axis (to the right on the map)."
+          ],
+          [
+            "ul",
+            [
+              "Click the <b>2D Pose Estimate</b> button in the RViz toolbar.",
+              "Click on the map where the robot is, hold the mouse button, and <b>drag in the direction the robot faces</b>, then let go.",
+              "A cloud of small green arrows appears around the robot. These are AMCL&apos;s guesses. Within a few seconds they tighten up as the lidar matches the map.",
+              "The Navigation 2 panel changes to <b>Navigation: active</b> and <b>Localization: active</b>."
+            ]
+          ],
+          [
+            "p",
+            "If you prefer typing, this sends the same pose from a second terminal:"
+          ],
+          [
+            "cmd",
+            "ros2 topic pub --times 5 -r 1 /initialpose geometry_msgs/msg/PoseWithCovarianceStamped \"{header: {frame_id: map}, pose: {pose: {position: {x: -2.0, y: -0.5, z: 0.0}, orientation: {w: 1.0}}, covariance: [0.25,0,0,0,0,0, 0,0.25,0,0,0,0, 0,0,0,0,0,0, 0,0,0,0,0,0, 0,0,0,0,0,0, 0,0,0,0,0,0.07]}}\"",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "p",
+            "Now ask TF2 where the robot is on the map. It should be very close to where you said:"
+          ],
+          [
+            "cmd",
+            "ros2 run tf2_ros tf2_echo map base_link",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "out",
+            "At time 9.427000000\n- Translation: [-1.967, -0.494, 0.010]\n... (more lines, press Ctrl+C)"
+          ],
+          [
+            "p",
+            "The small difference from (-2.0, -0.5) is AMCL&apos;s own estimate. It is never exact."
+          ],
+          [
+            "h",
+            "Step 2: send it somewhere"
+          ],
+          [
+            "p",
+            "Click <b>Nav2 Goal</b> in the toolbar, then click on a patch of free floor (a white or light area, not on a black wall or a pillar), and drag to choose the direction the robot should face when it arrives. The robot sets off. You will see:"
+          ],
+          [
+            "ul",
+            [
+              "A <b>green line</b>: the global plan, the route to the goal.",
+              "The <b>costmaps</b> as coloured halos around the walls and pillars. Warm colours (red, purple) are dangerous cells close to obstacles, cool cyan is the inflated safety margin. The planner avoids the warm cells.",
+              "The <b>Navigation 2</b> panel counting down distance remaining, and finally <b>Feedback: reached</b>."
+            ]
+          ],
+          [
+            "p",
+            "You can send a goal from the terminal too. This is the same thing the RViz button does:"
+          ],
+          [
+            "cmd",
+            "ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \"{pose: {header: {frame_id: map}, pose: {position: {x: 0.55, y: 0.55, z: 0.0}, orientation: {w: 1.0}}}}\"",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "out",
+            "Goal accepted with ID: 82447c63c6644649b9d51784252aaef0\n\nResult:\n    result: {}\n\nGoal finished with status: SUCCEEDED"
+          ],
+          [
+            "p",
+            "Notice <code>ros2 action</code>. A goal is not a topic message: it is an <b>action</b>, a request that takes a while, reports progress and ends with a result. The robot counts the goal as reached once it is within a small tolerance of it (about a quarter of a metre by default), so it may stop a little short of the exact point."
+          ],
+          [
+            "warn",
+            "If you see <code>Goal was rejected</code>, Nav2 is not active yet. Either the initial pose was never set, or the system is still starting. Check the Navigation 2 panel and try again."
+          ],
+          [
+            "h",
+            "Look inside"
+          ],
+          [
+            "cmd",
+            "ros2 action list",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "out",
+            "/assisted_teleop\n/backup\n/compute_path_through_poses\n/compute_path_to_pose\n/drive_on_heading\n/follow_path\n/follow_waypoints\n/navigate_through_poses\n/navigate_to_pose\n/smooth_path\n/spin\n/wait"
+          ],
+          [
+            "p",
+            "<code>/navigate_to_pose</code> is the one you used. <code>/follow_waypoints</code> visits a list of goals in order, and you will use it in the capstone. <code>/spin</code> and <code>/backup</code> are the recovery moves."
+          ],
+          [
+            "cmd",
+            "ros2 topic list | grep -E \"^/(plan|local_plan|map|scan|cmd_vel|goal_pose|initialpose|amcl_pose|odom)$\"",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "out",
+            "/amcl_pose\n/cmd_vel\n/goal_pose\n/initialpose\n/local_plan\n/map\n/odom\n/plan\n/scan"
+          ],
+          [
+            "ul",
+            [
+              "<code>/plan</code> and <code>/local_plan</code> are the green paths you see in RViz.",
+              "<code>/cmd_vel</code> is the same topic your Python drove with in lesson 4.6. Nav2 is just another node publishing velocities, which is why nothing about the robot had to change.",
+              "<code>/initialpose</code> and <code>/goal_pose</code> are what the RViz buttons publish."
+            ]
+          ],
+          [
+            "cmd",
+            "ros2 node list | grep -E \"amcl|planner|controller|bt_navigator|map_server|costmap\"",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "out",
+            "/amcl\n/bt_navigator\n/controller_server\n/global_costmap/global_costmap\n/local_costmap/local_costmap\n/map_server\n/planner_server"
+          ],
+          [
+            "p",
+            "Every part from the list at the top of the lesson is a node you can see. Nothing is hidden."
+          ],
+          [
+            "h",
+            "Shutting down"
+          ],
+          [
+            "p",
+            "Press <code>Ctrl+C</code> in terminal 1 and wait. Nav2 runs several background processes, and one of them can survive. Check for leftovers:"
+          ],
+          [
+            "cmd",
+            "pgrep -f \"gzserver|component_container\"",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "p",
+            "It should print nothing. If it prints numbers, stop them with <code>pkill -9 -f component_container</code> and <code>killall -9 gzserver</code>. A leftover Nav2 container uses a lot of CPU and confuses the next run."
+          ],
+          [
+            "try",
+            "Launch Nav2, set the initial pose, then send <b>three different goals in a row</b> with the Nav2 Goal button, one after the other, to places around the pillars. Watch the green path change shape to avoid them."
+          ],
+          [
+            "quiz",
+            {
+              "q": "What is AMCL&apos;s job in Nav2?",
+              "options": [
+                "Planning the path to the goal",
+                "Working out where the robot is on the map, using the lidar and the map",
+                "Driving the wheels",
+                "Drawing the map in RViz"
+              ],
+              "answer": 1,
+              "why": "AMCL is the <b>localization</b> part: it compares the lidar scan with the map to estimate the robot&apos;s position. The planner draws the path and the controller drives."
+            }
+          ],
+          [
+            "quiz",
+            {
+              "q": "You send a Nav2 goal and get <code>Goal was rejected</code>. What is the most likely cause?",
+              "options": [
+                "The goal is too close to the robot",
+                "Nav2 is not active yet, for example because the initial pose was not set",
+                "The map is too large",
+                "ROS 2 does not support goals"
+              ],
+              "answer": 1,
+              "why": "Nav2 only accepts goals when its navigation nodes are active, and that needs a known starting pose first. Set the pose with 2D Pose Estimate and check the Navigation 2 panel."
+            }
+          ]
+        ]
+      },
+      {
+        "id": "4.8",
+        "title": "Capstone: your own goal sender",
+        "minutes": 60,
+        "blocks": [
+          [
+            "p",
+            "In lesson 4.7 you clicked in RViz to send the robot places. Now you will replace the mouse with <b>your own program</b>. This is what real robot applications look like: a delivery robot, a warehouse cart or a security patrol is a Python or C++ node that sends Nav2 a list of goals, not a person clicking."
+          ],
+          [
+            "p",
+            "Nav2 comes with a friendly Python helper called <b>nav2_simple_commander</b>. Its <code>BasicNavigator</code> class wraps the actions you used from the terminal (<code>/navigate_to_pose</code>, <code>/follow_waypoints</code>) into a few simple methods."
+          ],
+          [
+            "h",
+            "A worked example: go to one goal"
+          ],
+          [
+            "p",
+            "Start the simulation in <b>terminal 1</b>, exactly as in lesson 4.7. You do <b>not</b> need to click anything in RViz this time, the script will set the starting pose for you."
+          ],
+          [
+            "cmd",
+            "ros2 launch nav2_bringup tb3_simulation_launch.py headless:=True",
+            "Terminal 1 (Ubuntu)"
+          ],
+          [
+            "p",
+            "In <b>terminal 2</b>, write the script:"
+          ],
+          [
+            "cmd",
+            "cd ~/robot_practice && nano go_to_goal.py",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "code",
+            "import time\n\nimport rclpy\nfrom geometry_msgs.msg import PoseStamped\nfrom nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult\n\nSTART = (-2.0, -0.5)\nGOAL = (0.55, 0.55)\n\n\ndef make_pose(x, y):\n    pose = PoseStamped()\n    pose.header.frame_id = \"map\"\n    pose.pose.position.x = x\n    pose.pose.position.y = y\n    pose.pose.orientation.w = 1.0\n    return pose\n\n\ndef main():\n    rclpy.init()\n    navigator = BasicNavigator()\n    navigator.setInitialPose(make_pose(*START))\n    navigator.waitUntilNav2Active()\n\n    navigator.goToPose(make_pose(*GOAL))\n    while not navigator.isTaskComplete():\n        feedback = navigator.getFeedback()\n        if feedback:\n            print(f\"Distance remaining: {feedback.distance_remaining:.2f} m\")\n        time.sleep(1.0)\n\n    result = navigator.getResult()\n    if result == TaskResult.SUCCEEDED:\n        print(\"Goal reached!\")\n    elif result == TaskResult.CANCELED:\n        print(\"Goal was canceled\")\n    else:\n        print(\"Goal failed\")\n    rclpy.shutdown()\n\n\nif __name__ == \"__main__\":\n    main()",
+            "go_to_goal.py"
+          ],
+          [
+            "ul",
+            [
+              "<code>make_pose(x, y)</code> builds a <code>PoseStamped</code>, ROS&apos;s &quot;a position and direction, in a named frame&quot;. The frame is <code>map</code>, the same map as in RViz. <code>orientation.w = 1.0</code> means &quot;facing along the map&apos;s x axis&quot; (no rotation). The <code>*START</code> unpacks the pair <code>(-2.0, -0.5)</code> into the two arguments.",
+              "<code>BasicNavigator()</code> is itself a node. <code>setInitialPose(...)</code> does the job of RViz&apos;s <b>2D Pose Estimate</b> button.",
+              "<code>waitUntilNav2Active()</code> waits until localization and navigation are both ready, so the goal will not be rejected.",
+              "<code>goToPose(...)</code> sends the goal and returns <b>immediately</b>. The robot is still driving, so the program loops: <code>isTaskComplete()</code> says whether it has finished, and <code>getFeedback()</code> reports progress. Here you print the <code>distance_remaining</code> once a second.",
+              "<code>getResult()</code> gives a <code>TaskResult</code>: <code>SUCCEEDED</code>, <code>CANCELED</code> or <code>FAILED</code>. A good program always checks which one it got."
+            ]
+          ],
+          [
+            "cmd",
+            "python3 go_to_goal.py",
+            "Terminal 2 (Ubuntu)"
+          ],
+          [
+            "out",
+            "[INFO] [...] [basic_navigator]: Publishing Initial Pose\n[INFO] [...] [basic_navigator]: Setting initial pose\n[INFO] [...] [basic_navigator]: Waiting for amcl_pose to be received\n... (these three lines repeat a few times)\n[INFO] [...] [basic_navigator]: Nav2 is ready for use!\n[INFO] [...] [basic_navigator]: Navigating to goal: 0.55 0.55...\nDistance remaining: 3.39 m\nDistance remaining: 3.27 m\nDistance remaining: 3.10 m\nDistance remaining: 2.75 m\n...\nDistance remaining: 0.72 m\nDistance remaining: 0.45 m\nGoal reached!"
+          ],
+          [
+            "p",
+            "The whole thing took about half a minute here. In RViz the robot drove across the map to the goal, with the distance falling steadily to zero."
+          ],
+          [
+            "warn",
+            "The script <b>assumes the robot is standing at <code>START</code></b>, because that is the pose it tells Nav2. That is true only on a <b>freshly launched</b> simulation. If you run it a second time without restarting, Nav2 believes the wrong position, and the planner may fail with <code>Goal failed</code> (the terminal running Nav2 will say <i>failed to generate a valid path</i>). This is a very common trap. Between runs, close the simulation with <code>Ctrl+C</code>, check <code>pgrep -f &quot;gzserver|component_container&quot;</code> is empty, and launch again."
+          ],
+          [
+            "h",
+            "The capstone: a patrol"
+          ],
+          [
+            "p",
+            "Your task: write <code>patrol.py</code>, a program that sends the robot on a <b>lap around the middle pillar</b>, visiting four waypoints in order, then reports whether the lap succeeded."
+          ],
+          [
+            "p",
+            "The four waypoints are the four open gaps around the central pillar. In map coordinates, in order:"
+          ],
+          [
+            "ul",
+            [
+              "<code>(-0.55, 0.55)</code>",
+              "<code>(0.55, 0.55)</code>",
+              "<code>(0.55, -0.55)</code>",
+              "<code>(-0.55, -0.55)</code>"
+            ]
+          ],
+          [
+            "p",
+            "Requirements:"
+          ],
+          [
+            "ul",
+            [
+              "Start from <code>go_to_goal.py</code> and copy it to <code>patrol.py</code>. The robot starts at <code>(-2.0, -0.5)</code> on a fresh simulation, as before.",
+              "Keep a Python <b>list</b> of waypoint tuples at the top of the file, and build the poses from it with a <b>list comprehension</b> (lesson 1.6).",
+              "Instead of <code>goToPose</code>, use the navigator method <b><code>followWaypoints(poses)</code></b>, which visits a list of poses in order.",
+              "While it runs, <code>getFeedback()</code> has a field <code>current_waypoint</code> (counting from 0). Print <code>Heading to waypoint 1 of 4</code>, <code>2 of 4</code> and so on, but <b>only when the number changes</b>, so the screen does not fill with repeats.",
+              "When the task is complete, print the result."
+            ]
+          ],
+          [
+            "p",
+            "<b>Stretch goals</b>, once the basic lap works:"
+          ],
+          [
+            "ul",
+            [
+              "Do <b>three laps</b>, using a <code>for</code> loop and printing the lap number and how long each lap took (<code>time.time()</code>). Remember the starting position changes after the first lap, so set the initial pose only once.",
+              "Make <code>Ctrl+C</code> stop the robot cleanly: catch <code>KeyboardInterrupt</code> and call <code>navigator.cancelTask()</code> before shutting down.",
+              "Read the waypoints from the command line, so you can change them without editing the file (<code>sys.argv</code>)."
+            ]
+          ],
+          [
+            "note",
+            "No solution is given on purpose. You have seen every piece: Python lists, nodes, the Nav2 map and the commands. The one new thing is <code>followWaypoints</code>, and it works almost exactly like <code>goToPose</code>. If you get stuck, paste your code and the error to Claude and ask for a hint, not the answer."
+          ],
+          [
+            "warn",
+            "Test on a <b>fresh simulation</b> every time (see the warning above). If the robot refuses to move or the result is <code>FAILED</code>, check three things in order: is the simulation freshly launched, do the coordinates in your list match the table above, and did you set the initial pose?"
+          ],
+          [
+            "try",
+            "Do the capstone. When <code>python3 patrol.py</code> makes the robot drive the whole lap and your program prints that all four waypoints were visited, mark this quest complete."
+          ],
+          [
+            "quiz",
+            {
+              "q": "Which <code>BasicNavigator</code> method sends a <b>list</b> of goals that the robot should visit in order?",
+              "options": [
+                "goToPose",
+                "followWaypoints",
+                "setInitialPose",
+                "waitUntilNav2Active"
+              ],
+              "answer": 1,
+              "why": "<code>goToPose</code> sends one goal. <code>followWaypoints</code> takes a list of poses and visits them one after another. The other two set up the start and wait for Nav2."
+            }
+          ],
+          [
+            "quiz",
+            {
+              "q": "Your script says <code>Goal failed</code>. You are running it a second time without restarting the simulation. What is the likely reason?",
+              "options": [
+                "Python forgot the goal",
+                "The script told Nav2 the robot is at START, but the robot is somewhere else, so planning goes wrong",
+                "Gazebo does not support goals",
+                "You must use a bigger map"
+              ],
+              "answer": 1,
+              "why": "<code>setInitialPose</code> tells Nav2 where the robot is. If the real robot is elsewhere, its idea of the world is wrong. Restart the simulation so the robot really is at <code>START</code>."
+            }
+          ],
+          [
+            "h",
+            "You made it"
+          ],
+          [
+            "p",
+            "Look at what you can do now, starting from a blank terminal: use Linux, write Python, run and inspect ROS 2 nodes, topics, services and parameters, build packages, describe a robot in URDF and xacro, view it in RViz, understand coordinate frames, simulate it in Gazebo, drive it and read its lidar from Python, and send it autonomous navigation goals from your own code."
+          ],
+          [
+            "p",
+            "Good next steps, when you want them: build <b>your own map</b> with SLAM (the robot drives around and the lidar draws the map as it goes), tune Nav2&apos;s costmaps and planner, add a camera and detect objects with a vision model such as YOLO, or run your code on a real robot."
+          ]
         ]
       }
     ]
