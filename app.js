@@ -52,6 +52,7 @@
     { id: "m3", icon: "📦", name: "Package builder", desc: "Complete the workspaces and packages module", test: function () { return mods.some(function (m) { return m.order === 3 && modDone(m); }); } },
     { id: "m4", icon: "🤖", name: "Robot builder", desc: "Complete the robot simulation module", test: function () { return mods.some(function (m) { return m.order === 4 && modDone(m); }); } },
     { id: "m5", icon: "🗺️", name: "Cartographer", desc: "Complete the mapping module", test: function () { return mods.some(function (m) { return m.order === 5 && modDone(m); }); } },
+    { id: "m6", icon: "💬", name: "Communicator", desc: "Complete the services, actions and QoS module", test: function () { return mods.some(function (m) { return m.order === 6 && modDone(m); }); } },
     { id: "lv4", icon: "⭐", name: "Rising star", desc: "Reach level 4", test: function () { return levelFor(totalXp()) >= 3; } }
   ];
 
