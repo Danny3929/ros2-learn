@@ -15,6 +15,7 @@
 <body>
 <div class="app">
   <aside class="side" id="side">
+    <button class="side-close" id="sideclose" aria-label="Close the lesson list">✕</button>
     <a class="brand" href="#/" title="Back to home">ROS 2 Learn <span>Humble · WSL · Python</span></a>
     <a class="nav-item home-link" id="home" href="#/">🏠 Home</a>
     <div class="hud" id="hud"></div>
@@ -22,10 +23,11 @@
     <div class="side-foot"><button id="reset" class="link">Reset all progress</button></div>
   </aside>
   <main class="main">
-    <button class="menu" id="menu" aria-label="Toggle lesson list">☰ Lessons</button>
+    <button class="menu" id="menu" aria-label="Open the lesson list" aria-controls="side" aria-expanded="false">☰ Lessons</button>
     <article id="lesson"></article>
   </main>
 </div>
+<div class="scrim" id="scrim"></div>
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <script src="content/m0_linux.js"></script>
 <script src="content/m1_python.js"></script>

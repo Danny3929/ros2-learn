@@ -83,12 +83,18 @@ h2 { font-size: 20px; margin: 32px 0 8px; }
 .btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
 .btn.done { background: var(--ok); color: var(--accent-ink); }
 .welcome ul { padding-left: 20px; }
+.scrim, .side-close { display: none; }
 @media (max-width: 800px) {
   .app { grid-template-columns: 1fr; }
   .side { position: fixed; z-index: 5; inset: 0 25% 0 0; height: 100vh; transform: translateX(-100%); transition: transform .2s; }
   .side.open { transform: none; box-shadow: 4px 0 24px rgba(0,0,0,.3); }
-  .menu { display: inline-block; }
+  .menu { display: inline-block; min-height: 44px; padding: 10px 14px; }
   .main { padding: 16px 16px 60px; }
+  /* the dimmed area beside the open lesson list: tap it to close the list */
+  .scrim { display: block; position: fixed; inset: 0; z-index: 4; background: rgba(0,0,0,.5); opacity: 0; pointer-events: none; transition: opacity .2s; }
+  body.nav-open .scrim { opacity: 1; pointer-events: auto; }
+  body.nav-open { overflow: hidden; }
+  .side-close { display: block; position: sticky; top: 0; z-index: 2; width: 44px; height: 44px; margin: -8px -8px 4px auto; border: 0; border-radius: 50%; background: var(--panel); color: var(--ink); font-size: 22px; line-height: 1; cursor: pointer; }
 }
 
 /* ---------- Game dashboard layer ---------- */

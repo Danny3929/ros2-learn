@@ -104,6 +104,15 @@
     });
   }
 
+  // ---------- lesson list open/close (phone) ----------
+  function navIsOpen() { return $("side").classList.contains("open"); }
+  function setNav(open) {
+    $("side").classList.toggle("open", open);
+    document.body.classList.toggle("nav-open", open);
+    $("menu").setAttribute("aria-expanded", open ? "true" : "false");
+  }
+  function closeNav() { if (navIsOpen()) setNav(false); }
+
   // ---------- rendering ----------
   function renderHud() {
     var xp = totalXp(), li = levelFor(xp), cur = LEVELS[li], nxt = LEVELS[li + 1];
@@ -188,7 +197,7 @@
   }
 
   function renderWelcome() {
-    currentId = null; renderNav(null); renderHud();
+    currentId = null; renderNav(null); renderHud(); closeNav();
     var next = lessons.find(function (l) { return !state.done[l.id]; });
     var started = Object.keys(state.awards).length > 0;
     var xp = totalXp(), li = levelFor(xp), cur = LEVELS[li], nxt = LEVELS[li + 1], s = streak();
@@ -270,7 +279,7 @@
       });
     });
     if (!keepScroll) window.scrollTo(0, 0);
-    $("side").classList.remove("open");
+    closeNav();
   }
 
   function rewire(l) { var y = window.scrollY; renderLesson(l.id, true); window.scrollTo(0, y); }
@@ -280,7 +289,26 @@
     if (m) renderLesson(decodeURIComponent(m[1])); else renderWelcome();
   }
   window.addEventListener("hashchange", route);
-  $("menu").addEventListener("click", function () { $("side").classList.toggle("open"); });
+
+  // ---------- lesson list on a phone ----------
+  // Open with the Lessons button or a swipe from the left edge. Close with the X, a tap on the
+  // dimmed area, a swipe to the left, the Escape key, or by tapping any link in the list.
+  $("menu").addEventListener("click", function () { setNav(!navIsOpen()); });
+  $("sideclose").addEventListener("click", closeNav);
+  $("scrim").addEventListener("click", closeNav);
+  $("side").addEventListener("click", function (e) { if (e.target.closest && e.target.closest("a")) closeNav(); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeNav(); });
+  window.addEventListener("resize", function () { if (window.innerWidth > 800) closeNav(); });
+  var swipe = null;
+  document.addEventListener("touchstart", function (e) { var t = e.touches[0]; swipe = { x: t.clientX, y: t.clientY }; }, { passive: true });
+  document.addEventListener("touchend", function (e) {
+    var s = swipe; swipe = null;
+    if (!s || window.innerWidth > 800) return;
+    var t = e.changedTouches[0], dx = t.clientX - s.x, dy = t.clientY - s.y;
+    if (Math.abs(dy) > 60 || Math.abs(dx) < 70) return;     // not a clear sideways swipe
+    if (dx < 0 && navIsOpen()) closeNav();
+    else if (dx > 0 && !navIsOpen() && s.x < 24) setNav(true);
+  }, { passive: true });
   $("reset").addEventListener("click", function () {
     if (confirm("Erase all XP, badges, progress, notes and quiz answers?")) { state = blank(); save(); route(); }
   });
