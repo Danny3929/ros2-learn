@@ -37,7 +37,7 @@
     while (state.days.indexOf(today(n + off)) >= 0) n++;
     return n;
   }
-  function modDone(m) { return (m.lessons || []).length > 0 && m.lessons.every(function (l) { return state.done[l.id]; }); }
+  function modDone(m) { return (m.lessons || []).length > 0 && !(m.planned && m.planned.length) && m.lessons.every(function (l) { return state.done[l.id]; }); }
   function countKeys(obj, prefix) { return Object.keys(obj).filter(function (k) { return k.indexOf(prefix) === 0; }).length; }
 
   var BADGES = [
