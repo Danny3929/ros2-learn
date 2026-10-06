@@ -5,8 +5,31 @@
   var lessons = [];
   mods.forEach(function (m) { (m.lessons || []).forEach(function (l) { l.mod = m; lessons.push(l); }); });
 
+  // Every block keeps its ORIGINAL number as its key, because saved answers and XP are stored under it.
+  // Extra blocks (pictures, predictions) come from content/enhance.js and get their own stable keys,
+  // so adding them never shifts what was already saved.
+  lessons.forEach(function (l) { l.blocks.forEach(function (b, i) { b.key = String(i); }); });
+  function blockText(b) { return typeof b[1] === "string" ? b[1] : Array.isArray(b[1]) ? b[1].join(" ") : (b[1] && b[1].q ? b[1].q : ""); }
+  (window.ENHANCE || []).forEach(function (e) {
+    var l = lessons.find(function (x) { return x.id === e.lesson; });
+    if (!l) { console.warn("enhance: no lesson " + e.lesson); return; }
+    var at = e.at, pos = -1;
+    for (var i = 0; i < l.blocks.length; i++) {
+      var b = l.blocks[i];
+      if (b.key.charAt(0) === "e") continue;
+      if (at.kind && b[0] !== at.kind) continue;
+      var t = blockText(b);
+      if (at.exact ? t === at.text : t.indexOf(at.text) >= 0) { pos = i; break; }
+    }
+    if (pos < 0) { console.warn("enhance: no match for " + e.id); return; }
+    e.blocks.forEach(function (nb, n) { nb.key = "e_" + e.id + "_" + n; });
+    Array.prototype.splice.apply(l.blocks, [e.place === "before" ? pos : pos + 1, 0].concat(e.blocks));
+  });
+  lessons.forEach(function (l) { l.byKey = {}; l.blocks.forEach(function (b) { l.byKey[b.key] = b; }); });
+  function storyFor(order) { return (window.STORY || {})[order]; }
+
   // ---------- state ----------
-  var blank = function () { return { done: {}, notes: {}, quiz: {}, tries: {}, tried: {}, awards: {}, badges: {}, days: [] }; };
+  var blank = function () { return { done: {}, notes: {}, quiz: {}, tries: {}, tried: {}, awards: {}, badges: {}, days: [], steps: {}, stepsAll: {}, predict: {}, predictOk: {}, opened: {}, prefs: {} }; };
   var state = blank();
   try { var raw = localStorage.getItem(KEY); if (raw) state = Object.assign(blank(), JSON.parse(raw)); } catch (e) {}
   function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
@@ -21,7 +44,7 @@
     { at: 400, title: "Subscriber" }, { at: 600, title: "Service Caller" }, { at: 850, title: "Launcher" },
     { at: 1150, title: "Navigator" }, { at: 1500, title: "Roboticist" }
   ];
-  var XP = { quizFirst: 10, quizRetry: 3, tryIt: 10, lesson: 25, module: 50 };
+  var XP = { quizFirst: 10, quizRetry: 3, tryIt: 10, lesson: 25, module: 50, predict: 5 };
 
   function totalXp() { var t = 0; for (var k in state.awards) t += state.awards[k]; return t; }
   function levelFor(xp) {
@@ -54,6 +77,7 @@
     { id: "m5", icon: "🗺️", name: "Cartographer", desc: "Complete the mapping module", test: function () { return mods.some(function (m) { return m.order === 5 && modDone(m); }); } },
     { id: "m6", icon: "💬", name: "Communicator", desc: "Complete the services, actions and QoS module", test: function () { return mods.some(function (m) { return m.order === 6 && modDone(m); }); } },
     { id: "m7", icon: "🔧", name: "Debugger", desc: "Complete the recording and debugging module", test: function () { return mods.some(function (m) { return m.order === 7 && modDone(m); }); } },
+    { id: "oracle", icon: "🔮", name: "Fortune teller", desc: "Predict 5 outcomes correctly before running them", test: function () { return Object.keys(state.predictOk).length >= 5; } },
     { id: "lv4", icon: "⭐", name: "Rising star", desc: "Reach level 4", test: function () { return levelFor(totalXp()) >= 3; } }
   ];
 
@@ -157,22 +181,32 @@
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(ok, fallback); else fallback();
   }
 
-  function renderBlock(l, b, i) {
-    var kind = b[0], v = b[1], key = l.id + ":" + i;
+  // forKey: the command this block directly follows (so its output can be revealed when that step is ticked)
+  function renderBlock(l, b, forKey) {
+    var kind = b[0], v = b[1], key = l.id + ":" + b.key;
     if (kind === "p") return "<p>" + v + "</p>";
     if (kind === "h") return "<h2>" + esc(v) + "</h2>";
     if (kind === "ul") return "<ul>" + v.map(function (x) { return "<li>" + x + "</li>"; }).join("") + "</ul>";
     if (kind === "note") return '<div class="box note"><b class="t">Note</b><p>' + v + "</p></div>";
     if (kind === "warn") return '<div class="box warn"><b class="t">Watch out</b><p>' + v + "</p></div>";
+    if (kind === "img") {
+      return '<figure class="shot"><img src="' + esc(v) + '" alt="' + esc(b[2] || "") + '" loading="lazy">' +
+        (b[3] ? "<figcaption>" + b[3] + "</figcaption>" : "") + "</figure>";
+    }
     if (kind === "try") {
       var d = state.tried[key];
       return '<div class="box try"><b class="t">Quest</b><p>' + v + '</p><button class="quest' + (d ? " got" : "") + '" data-try="' + key + '"' + (d ? " disabled" : "") + ">" +
         (d ? "✓ Quest complete" : "I did it · +" + XP.tryIt + " XP") + "</button></div>";
     }
-    if (kind === "out") return '<pre class="out">' + esc(v) + "</pre>";
+    if (kind === "out") {
+      var open = (forKey && state.steps[l.id + ":" + forKey]) || state.prefs.outs || state.opened[key];
+      return '<details class="expect" data-key="' + key + '"' + (forKey ? ' data-for="' + l.id + ":" + forKey + '"' : "") + (open ? " open" : "") +
+        '><summary>👀 What you should see</summary><pre class="out">' + esc(v) + "</pre></details>";
+    }
     if (kind === "cmd") {
-      var where = b[2] || "Ubuntu (WSL) terminal";
-      return '<div class="cmd"><span class="where">' + esc(where) + '</span><span class="prompt">$ </span>' + esc(v) +
+      var where = b[2] || "Ubuntu (WSL) terminal", ran = state.steps[key];
+      return '<div class="cmd step' + (ran ? " ran" : "") + '"><span class="where">' + esc(where) + '</span><span class="prompt">$ </span>' + esc(v) +
+        '<button class="stepdone' + (ran ? " on" : "") + '" data-step="' + key + '" aria-pressed="' + (ran ? "true" : "false") + '" title="Tick when you have run this">' + (ran ? "☑ Done" : "☐ Done") + "</button>" +
         '<button data-copy="' + esc(v).replace(/"/g, "&quot;") + '">Copy</button></div>';
     }
     if (kind === "code") {
@@ -181,6 +215,18 @@
     }
     if (kind === "repl") {
       return '<div class="cmd code"><span class="where">Inside Python (the &gt;&gt;&gt; prompt)</span>' + esc(v) + "</div>";
+    }
+    if (kind === "predict") {
+      var pick = state.predict[key], answered = pick !== undefined, good = pick === v.answer;
+      var ph = '<div class="quiz predict" data-key="' + key + '"><div class="ptag">🔮 Predict first</div><div class="q">' + v.q + "</div>";
+      v.options.forEach(function (o, idx) {
+        var cls = "opt";
+        if (answered) { if (idx === v.answer) cls += " right"; else if (idx === pick) cls += " wrong"; }
+        ph += '<button class="' + cls + '" data-idx="' + idx + '"' + (answered ? " disabled" : "") + ">" + o + "</button>";
+      });
+      ph += answered ? '<div class="why">' + (good ? "You called it. " : "Not quite. ") + v.why + "</div>"
+                     : '<div class="hint">Take a guess, there is no penalty. You earn +' + XP.predict + " XP for trying.</div>";
+      return ph + "</div>";
     }
     if (kind === "quiz") {
       var chosen = state.quiz[key], solved = chosen === v.answer;
@@ -230,13 +276,44 @@
     document.querySelector(".main").classList.add("home");
   }
 
+  function stepCounts(l) {
+    var total = 0, done = 0;
+    l.blocks.forEach(function (b) { if (b[0] === "cmd") { total++; if (state.steps[l.id + ":" + b.key]) done++; } });
+    return { total: total, done: done };
+  }
+
+  function showZoom(src, alt) {
+    var z = document.createElement("div");
+    z.className = "zoomer";
+    var im = document.createElement("img");
+    im.src = src; im.alt = alt || "";
+    z.appendChild(im);
+    z.addEventListener("click", function () { if (z.parentNode) z.parentNode.removeChild(z); });
+    document.body.appendChild(z);
+  }
+
   function renderLesson(id, keepScroll) {
     var idx = lessons.findIndex(function (l) { return l.id === id; });
     if (idx < 0) return renderWelcome();
     var l = lessons[idx];
     currentId = id; renderNav(id); renderHud(); document.querySelector(".main").classList.remove("home");
     var h = '<a class="backhome" href="#/">← Home</a><h1>' + esc(l.id + "  " + l.title) + '</h1><div class="meta">' + esc(l.mod.title) + " · about " + l.minutes + " min</div>";
-    l.blocks.forEach(function (b, i) { h += renderBlock(l, b, i); });
+    var story = storyFor(l.mod.order);
+    if (story && l.mod.lessons[0] === l) {
+      h += '<div class="briefing"><div class="btag">Mission briefing</div><h3>' + story.icon + " " + esc(story.title) + "</h3><p>" + esc(story.text) + "</p></div>";
+    }
+    var sc = stepCounts(l);
+    if (sc.total) {
+      h += '<div class="stephead"><span id="stepcount">' + sc.done + " of " + sc.total + ' steps done</span>' +
+        '<label class="allouts"><input type="checkbox" id="allouts"' + (state.prefs.outs ? " checked" : "") + "> Show all expected output</label></div>" +
+        '<div class="bar steps"><i id="stepfill" style="width:' + Math.round(sc.done / sc.total * 100) + '%"></i></div>';
+    }
+    // an output belongs to the most recent command (a paragraph may sit in between), until the next output or heading
+    var lastCmd = null;
+    l.blocks.forEach(function (b) {
+      h += renderBlock(l, b, b[0] === "out" ? lastCmd : null);
+      if (b[0] === "cmd") lastCmd = b.key; else if (b[0] === "out" || b[0] === "h") lastCmd = null;
+    });
     h += '<div class="notes"><h2>My notes</h2><textarea id="note" placeholder="Anything you want to remember or ask about later"></textarea></div>';
     var prev = lessons[idx - 1], next = lessons[idx + 1], got = state.awards["l:" + id] !== undefined;
     h += '<div class="actions">' +
@@ -250,13 +327,51 @@
       state.done[id] = !state.done[id]; save();
       if (state.done[id]) {
         if (award("l:" + id, XP.lesson, "lesson complete")) confetti(30);
-        if (modDone(l.mod) && award("m:" + l.mod.order, XP.module, "module complete: " + l.mod.title)) confetti(60);
+        if (modDone(l.mod) && award("m:" + l.mod.order, XP.module, "module complete: " + l.mod.title)) {
+          confetti(60);
+          var st = storyFor(l.mod.order);
+          if (st) toast("🏁 <b>Mission complete!</b> " + esc(st.done), "big");
+        }
         checkBadges(); save();
       }
       renderLesson(id, true);
     });
-    $("lesson").querySelectorAll(".cmd button").forEach(function (b) {
+    $("lesson").querySelectorAll("button[data-copy]").forEach(function (b) {
       b.addEventListener("click", function () { copy(b.getAttribute("data-copy"), b); });
+    });
+    // tick a step: marks the command, reveals its expected output, updates the progress bar
+    $("lesson").querySelectorAll("button.stepdone").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var k = b.getAttribute("data-step"), on = !state.steps[k];
+        if (on) state.steps[k] = true; else delete state.steps[k];
+        b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false"); b.textContent = on ? "☑ Done" : "☐ Done";
+        b.parentNode.classList.toggle("ran", on);
+        var det = $("lesson").querySelector('details[data-for="' + k + '"]');
+        if (det && !state.prefs.outs) det.open = on;
+        var c = stepCounts(l);
+        $("stepcount").textContent = c.done + " of " + c.total + " steps done";
+        $("stepfill").style.width = Math.round(c.done / c.total * 100) + "%";
+        if (c.done === c.total && !state.stepsAll[id]) { state.stepsAll[id] = true; toast("✅ <b>Every step done!</b> Nicely driven.", "xp"); confetti(14); }
+        save();
+      });
+    });
+    var all = $("allouts");
+    if (all) all.addEventListener("change", function () {
+      state.prefs.outs = all.checked; save();
+      $("lesson").querySelectorAll("details.expect").forEach(function (d) {
+        var forKey = d.getAttribute("data-for");
+        d.open = all.checked || !!(forKey && state.steps[forKey]) || !!state.opened[d.getAttribute("data-key")];
+      });
+    });
+    $("lesson").querySelectorAll("details.expect").forEach(function (d) {
+      d.addEventListener("toggle", function () {
+        var k = d.getAttribute("data-key");
+        if (d.open) state.opened[k] = true; else delete state.opened[k];
+        save();
+      });
+    });
+    $("lesson").querySelectorAll(".shot img").forEach(function (im) {
+      im.addEventListener("click", function () { showZoom(im.getAttribute("src"), im.getAttribute("alt")); });
     });
     $("lesson").querySelectorAll("button.quest").forEach(function (b) {
       b.addEventListener("click", function () {
@@ -264,8 +379,8 @@
         award("t:" + k, XP.tryIt, "quest complete"); confetti(14); rewire(l);
       });
     });
-    $("lesson").querySelectorAll(".quiz").forEach(function (q) {
-      var key = q.getAttribute("data-key"), bi = parseInt(key.split(":")[1], 10), blk = l.blocks[bi][1];
+    $("lesson").querySelectorAll(".quiz:not(.predict)").forEach(function (q) {
+      var key = q.getAttribute("data-key"), blk = l.byKey[key.slice(l.id.length + 1)][1];
       q.querySelectorAll("button.opt").forEach(function (b) {
         b.addEventListener("click", function () {
           var pick = parseInt(b.getAttribute("data-idx"), 10);
@@ -274,6 +389,19 @@
             award("q:" + key, state.tries[key] === 1 ? XP.quizFirst : XP.quizRetry, state.tries[key] === 1 ? "first try!" : "correct");
             if (state.tries[key] === 1) confetti(10);
           }
+          rewire(l);
+        });
+      });
+    });
+    // predictions: one guess, instant explanation, a little XP just for trying
+    $("lesson").querySelectorAll(".quiz.predict").forEach(function (q) {
+      var key = q.getAttribute("data-key"), blk = l.byKey[key.slice(l.id.length + 1)][1];
+      q.querySelectorAll("button.opt").forEach(function (b) {
+        b.addEventListener("click", function () {
+          var pick = parseInt(b.getAttribute("data-idx"), 10), good = pick === blk.answer;
+          state.predict[key] = pick; if (good) state.predictOk[key] = true; save();
+          award("p:" + key, XP.predict, good ? "you called it!" : "good guess");
+          if (good) confetti(8);
           rewire(l);
         });
       });
