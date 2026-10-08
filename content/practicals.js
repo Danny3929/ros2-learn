@@ -9,13 +9,13 @@ window.PRACTICALS = [
     chips: ["pwd", "ls", "ls -l", "mkdir practice", "cd practice", "cd ..", "touch a.txt", "echo \"hello linux\" > b.txt", "cat b.txt", "cp b.txt c.txt", "mv c.txt notes.txt", "rm a.txt"],
     tasks: [
       { text: "Make a folder called <code>practice</code> and move into it.", hint: "mkdir practice  then  cd practice",
-        done: function (s) { return s.cwd() === "/home/daniel/practice"; } },
+        done: function (s) { return s.cwd() === "/home/student/practice"; } },
       { text: "Create a file <code>b.txt</code> that contains the words <code>hello linux</code>.", hint: "echo \"hello linux\" > b.txt",
-        done: function (s) { return /hello linux/.test(s.fileText("/home/daniel/practice/b.txt") || ""); } },
+        done: function (s) { return /hello linux/.test(s.fileText("/home/student/practice/b.txt") || ""); } },
       { text: "Copy <code>b.txt</code> to <code>c.txt</code>, then rename <code>c.txt</code> to <code>notes.txt</code>.", hint: "cp b.txt c.txt  then  mv c.txt notes.txt",
-        done: function (s) { return s.exists("/home/daniel/practice/notes.txt") && s.exists("/home/daniel/practice/b.txt") && !s.exists("/home/daniel/practice/c.txt"); } },
+        done: function (s) { return s.exists("/home/student/practice/notes.txt") && s.exists("/home/student/practice/b.txt") && !s.exists("/home/student/practice/c.txt"); } },
       { text: "Make an empty file <code>a.txt</code>, check it with <code>ls</code>, then delete it.", hint: "touch a.txt, ls, rm a.txt",
-        done: function (s) { return !s.exists("/home/daniel/practice/a.txt") && s.okLines.some(function (l) { return /^touch\s+a\.txt/.test(l); }) && s.okLines.some(function (l) { return /^rm\s+a\.txt/.test(l); }); } }
+        done: function (s) { return !s.exists("/home/student/practice/a.txt") && s.okLines.some(function (l) { return /^touch\s+a\.txt/.test(l); }) && s.okLines.some(function (l) { return /^rm\s+a\.txt/.test(l); }); } }
     ]
   },
   {

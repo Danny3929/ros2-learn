@@ -133,10 +133,10 @@
         else { if (!cur.c[p]) cur.c[p] = dirNode(); cur = cur.c[p]; }
       });
     }
-    ["/home/daniel", "/tmp", "/etc", "/usr/bin", "/usr/share", "/opt/ros/humble/bin", "/opt/ros/humble/lib", "/opt/ros/humble/include", "/opt/ros/humble/share"].forEach(function (d) { mk(d); });
+    ["/home/student", "/tmp", "/etc", "/usr/bin", "/usr/share", "/opt/ros/humble/bin", "/opt/ros/humble/lib", "/opt/ros/humble/include", "/opt/ros/humble/share"].forEach(function (d) { mk(d); });
     mk("/opt/ros/humble/setup.bash", "# ROS 2 Humble environment setup\n");
     mk("/opt/ros/humble/local_setup.bash", "# ROS 2 Humble local setup\n");
-    mk("/home/daniel/.bashrc", "# ~/.bashrc: executed by bash for non-login shells.\nsource /opt/ros/humble/setup.bash\nsource /usr/share/colcon_cd/function/colcon_cd.sh\n");
+    mk("/home/student/.bashrc", "# ~/.bashrc: executed by bash for non-login shells.\nsource /opt/ros/humble/setup.bash\nsource /usr/share/colcon_cd/function/colcon_cd.sh\n");
     mk("/etc/os-release", 'PRETTY_NAME="Ubuntu 22.04.5 LTS"\n');
     return root;
   }
@@ -146,11 +146,11 @@
     opts = opts || {};
     var fs = baseFs();
     var env = {
-      HOME: "/home/daniel", USER: "daniel", SHELL: "/bin/bash", LANG: "C.UTF-8", PWD: "/home/daniel",
+      HOME: "/home/student", USER: "student", SHELL: "/bin/bash", LANG: "C.UTF-8", PWD: "/home/student",
       PATH: "/opt/ros/humble/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
       ROS_VERSION: "2", ROS_PYTHON_VERSION: "3", ROS_LOCALHOST_ONLY: "0", ROS_DISTRO: "humble"
     };
-    var cwd = "/home/daniel";
+    var cwd = "/home/student";
     var S = {
       history: [],       // every command line typed
       okLines: [],       // command lines that finished without an error
@@ -215,7 +215,7 @@
       var abs = norm(path), parts = abs.split("/").filter(Boolean), cur = fs;
       parts.forEach(function (p) { if (!cur.c[p]) cur.c[p] = dirNode(); cur = cur.c[p]; });
     };
-    S.prompt = function () { return "daniel@laptop:" + shortPath(cwd) + "$ "; };
+    S.prompt = function () { return "student@laptop:" + shortPath(cwd) + "$ "; };
 
     // ----- the ROS graph, computed from the running nodes -----
     var PARAM_SRV = ["describe_parameters", "get_parameter_types", "get_parameters", "list_parameters", "set_parameters", "set_parameters_atomically"];
@@ -660,7 +660,7 @@
         var rows = names.map(function (nm) {
           var node = nm === "." || nm === ".." ? (nm === "." ? lookup(abs) : lookup(norm(abs + "/.."))) : lookup(abs === "/" ? "/" + nm : abs + "/" + nm);
           var isD = node && node.t === "d";
-          return (isD ? "drwxr-xr-x" : "-rw-r--r--") + " " + (isD ? "2" : "1") + " daniel daniel " + ("     " + (isD ? 4096 : node ? node.d.length : 0)).slice(-5) + " Oct  8 10:00 " + nm;
+          return (isD ? "drwxr-xr-x" : "-rw-r--r--") + " " + (isD ? "2" : "1") + " student student " + ("     " + (isD ? 4096 : node ? node.d.length : 0)).slice(-5) + " Oct  8 10:00 " + nm;
         });
         return "total " + rows.length * 4 + "\n" + rows.join("\n");
       }
@@ -690,7 +690,7 @@
       pwd: function () { return { out: cwd, code: 0 }; },
       "true": function () { return { out: "", code: 0 }; },
       "false": function () { return { out: "", code: 1 }; },
-      whoami: function () { return { out: "daniel", code: 0 }; },
+      whoami: function () { return { out: "student", code: 0 }; },
       hostname: function () { return { out: "laptop", code: 0 }; },
       date: function () { return { out: "Wed Oct  8 10:00:00 UTC 2026", code: 0 }; },
       lsb_release: function (a) { return { out: a.indexOf("-d") >= 0 ? "Description:\tUbuntu 22.04.5 LTS" : "No LSB modules are available.\nDistributor ID:\tUbuntu\nDescription:\tUbuntu 22.04.5 LTS\nRelease:\t22.04\nCodename:\tjammy", code: 0 }; },

@@ -412,11 +412,11 @@ window.MODULES.push({
         ],
         [
           "p",
-          "Open Windows File Explorer, paste this into the address bar (replace <code>daniel</code> with your Linux user name) and double-click <code>mymap.png</code>:"
+          "Open Windows File Explorer, paste this into the address bar (replace <code>student</code> with your Linux user name) and double-click <code>mymap.png</code>:"
         ],
         [
           "code",
-          "\\\\wsl.localhost\\Ubuntu-22.04\\home\\daniel\\maps",
+          "\\\\wsl.localhost\\Ubuntu-22.04\\home\\student\\maps",
           "File Explorer address bar"
         ],
         [
