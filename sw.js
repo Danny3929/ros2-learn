@@ -1,10 +1,10 @@
 // Bump CACHE whenever any file changes so installed copies pick up the update.
-const CACHE = "ros2-learn-v19";
+const CACHE = "ros2-learn-v21";
 const FILES = [
   "./", "./index.html", "./style.css", "./app.js", "./manifest.json",
   "./content/m0_linux.js", "./content/m1_python.js", "./content/m2_turtlesim.js",
   "./content/m3_workspaces.js", "./content/m4_robot.js", "./content/m5_mapping.js", "./content/m6_talking.js", "./content/m7_debugging.js", "./content/planned.js",
-  "./content/story.js", "./content/enhance.js",
+  "./content/story.js", "./content/enhance.js", "./content/sim.js", "./content/practicals.js",
   "./images/gazebo_mybot.jpg", "./images/gazebo_pillars.jpg", "./images/gazebo_turtlebot.jpg", "./images/nav2_costmaps.jpg", "./images/rqt_console.jpg", "./images/rviz_mybot.jpg", "./images/saved_map.jpg", "./images/slam_building_map.jpg", "./images/turtle_chase.jpg", "./images/turtle_circle.jpg", "./images/turtle_two.jpg",
   "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png",
 ];
