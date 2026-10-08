@@ -234,17 +234,18 @@ details.expect[open] > .out { margin-top: 0; }
 .pdpad button:active { transform: translateY(2px); }
 .pdpad [data-d="up"] { grid-area: up; } .pdpad [data-d="left"] { grid-area: left; } .pdpad [data-d="down"] { grid-area: down; } .pdpad [data-d="right"] { grid-area: right; }
 .pnote { font-size: 12px; color: var(--muted); margin-top: 6px; }
-.pscreen { background: var(--code-bg); color: var(--code-ink); font: 13px/1.45 ui-monospace, Consolas, monospace; padding: 10px 12px; height: 260px; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
+.pscreen { background: #0d0b1f; color: #ece9ff; font: 15px/1.45 ui-monospace, Consolas, monospace; padding: 10px 12px; height: 300px; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; cursor: text; }
 .pscreen .pl { white-space: pre-wrap; overflow-wrap: anywhere; }
 .pscreen .echo { color: #6cc38f; position: static; background: none; padding: 6px 0 0; margin: 0; border-radius: 0; overflow: visible; font: inherit; white-space: pre-wrap; }
 .pscreen .pe { color: #ff9b95; } .pscreen .sys { color: #9fa6d9; font-style: italic; }
 .pchips { display: flex; gap: 6px; overflow-x: auto; padding: 8px 10px; background: var(--code-bg); border-top: 1px solid #2a2557; -webkit-overflow-scrolling: touch; }
 .pchips button { flex: none; border: 1px solid #3b3570; background: #26214f; color: #dcd8ff; border-radius: 999px; padding: 8px 12px; font: 12px ui-monospace, Consolas, monospace; cursor: pointer; min-height: 38px; white-space: nowrap; }
-.pform { display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: #0d0b1f; }
-.pps { color: #6cc38f; font: 13px ui-monospace, Consolas, monospace; white-space: nowrap; max-width: 38%; overflow: hidden; text-overflow: ellipsis; }
-.pin { flex: 1; min-width: 0; background: transparent; border: 0; border-bottom: 1px solid #3b3570; color: #fff; font: 16px ui-monospace, Consolas, monospace; padding: 8px 2px; outline: none; }
-.pin:focus { border-bottom-color: var(--accent); }
-.prun { border: 0; border-radius: 10px; background: var(--ok); color: #fff; font: inherit; font-weight: 700; padding: 8px 16px; min-height: 42px; cursor: pointer; }
 .pkeys { display: flex; gap: 6px; padding: 0 10px 10px; background: #0d0b1f; }
 .pkeys button { flex: 1; border: 1px solid #3b3570; background: #26214f; color: #dcd8ff; border-radius: 10px; font: 13px system-ui; min-height: 40px; cursor: pointer; }
-@media (max-width: 800px) { .pscreen { height: 220px; } }
+.pform { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0; margin: 0; padding: 0; }
+.pps { color: #6cc38f; white-space: pre; flex: none; }
+.pin { flex: 1 1 8ch; min-width: 8ch; background: transparent; border: 0; outline: none; padding: 0; margin: 0; color: #fff; font: 16px/1.45 ui-monospace, Consolas, monospace; caret-color: #6cc38f; border-radius: 0; }
+.pscreen .pl, .pscreen .echo { font-size: 16px; }
+.pchips { border-top: 0; }
+@media (max-width: 800px) { .pscreen { height: 260px; } }
+.pchips { scrollbar-width: none; } .pchips::-webkit-scrollbar { display: none; }

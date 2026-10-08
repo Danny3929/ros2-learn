@@ -286,11 +286,12 @@
       '<div class="pdpad" hidden><button type="button" data-d="up" aria-label="Forward">▲</button><button type="button" data-d="left" aria-label="Turn left">◀</button>' +
       '<button type="button" data-d="down" aria-label="Backward">▼</button><button type="button" data-d="right" aria-label="Turn right">▶</button></div>' +
       '<div class="pnote">Turtle window (pretend). Start <code>turtle_teleop_key</code> to unlock the arrow pad.</div></div>' +
-      '<div class="pscreen" role="log" aria-live="polite"></div><div class="pchips">';
+      '<div class="pscreen"><div class="plines" role="log" aria-live="polite"></div>' +
+      '<form class="pform" autocomplete="off"><span class="pps"></span>' +
+      '<input class="pin" type="text" autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="send" aria-label="Terminal: type a command and press Enter"></form></div>' +
+      '<div class="pchips">';
     (spec.chips || []).forEach(function (c) { h += '<button type="button" data-cmd="' + esc(c).replace(/"/g, "&quot;") + '">' + esc(shortLabel(c)) + "</button>"; });
-    h += '</div><form class="pform" autocomplete="off"><span class="pps"></span>' +
-      '<input class="pin" type="text" autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="send" aria-label="Type a command" placeholder="type a command">' +
-      '<button type="submit" class="prun">Run</button></form>' +
+    h += '</div>' +
       '<div class="pkeys"><button type="button" data-k="tab">Tab</button><button type="button" data-k="up">↑</button><button type="button" data-k="down">↓</button>' +
       '<button type="button" data-k="int">Ctrl+C</button><button type="button" data-k="clear">Clear</button></div></section>';
     return h;
@@ -307,14 +308,14 @@
 
   function mountPractical(el, spec) {
     var ses = getSession(spec), sim = ses.sim, rec = pracRec(spec.id);
-    var scr = el.querySelector(".pscreen"), inp = el.querySelector(".pin"), ps = el.querySelector(".pps");
+    var scr = el.querySelector(".pscreen"), lines = el.querySelector(".plines"), inp = el.querySelector(".pin"), ps = el.querySelector(".pps");
     var stage = el.querySelector(".pstage"), cv = el.querySelector(".pcanvas"), pad = el.querySelector(".pdpad");
 
     function addLine(cls, text) {
-      var d = document.createElement("div"); d.className = "pl " + cls; d.textContent = text; scr.appendChild(d);
+      var d = document.createElement("div"); d.className = "pl " + cls; d.textContent = text; lines.appendChild(d);
       scr.scrollTop = scr.scrollHeight;
     }
-    function prompt() { return sim.prompt().replace(/^daniel@laptop:/, ""); }
+    function prompt() { return sim.prompt(); }
     ps.textContent = prompt();
     if (!ses.lines.length) ses.lines.push({ c: "sys", t: "Pretend Ubuntu 22.04 with ROS 2 Humble. Type  help  to see what works." });
     ses.lines.forEach(function (l) { addLine(l.c, l.t); });
@@ -372,15 +373,20 @@
     function clean(line) { return line.replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/—/g, "--").replace(/–/g, "-"); }
     function run(raw) {
       var line = clean(raw);
-      log("echo", prompt() + " " + line);
+      log("echo", prompt() + line);
       var r = sim.exec(line);
-      if (r.clear) { ses.lines = []; scr.textContent = ""; }
+      if (r.clear) { ses.lines = []; lines.textContent = ""; }
       else if (r.out !== "") log(r.code ? "pe" : "po", r.out.replace(/\n+$/, ""));
       if (line.trim() && ses.hist[ses.hist.length - 1] !== line) ses.hist.push(line);
       ses.hi = ses.hist.length; ses.draft = "";
       ps.textContent = prompt();
       draw(); check();
     }
+    scr.addEventListener("click", function () {
+      var sel = window.getSelection && window.getSelection();
+      if (sel && String(sel).length) return;
+      inp.focus();
+    });
     el.querySelector(".pform").addEventListener("submit", function (e) {
       e.preventDefault();
       var v = inp.value; inp.value = "";
@@ -398,7 +404,7 @@
       inp.value = ses.hi === ses.hist.length ? ses.draft : ses.hist[ses.hi];
     }
     function interrupt() {
-      var live = inp.value; log("echo", prompt() + " " + live + "^C"); inp.value = "";
+      var live = inp.value; log("echo", prompt() + live + "^C"); inp.value = "";
       var o = sim.interrupt(); if (o !== "^C") log("po", o.replace(/^\^C\n?/, ""));
       draw(); check();
     }
@@ -407,13 +413,13 @@
       else if (e.key === "ArrowUp") { e.preventDefault(); histMove(-1); }
       else if (e.key === "ArrowDown") { e.preventDefault(); histMove(1); }
       else if (e.ctrlKey && (e.key === "c" || e.key === "C")) { e.preventDefault(); interrupt(); }
-      else if (e.ctrlKey && (e.key === "l" || e.key === "L")) { e.preventDefault(); ses.lines = []; scr.textContent = ""; }
+      else if (e.ctrlKey && (e.key === "l" || e.key === "L")) { e.preventDefault(); ses.lines = []; lines.textContent = ""; }
     });
     el.querySelector(".pkeys").addEventListener("click", function (e) {
       var b = e.target.closest("button[data-k]"); if (!b) return;
       var k = b.getAttribute("data-k");
       if (k === "tab") complete(); else if (k === "up") histMove(-1); else if (k === "down") histMove(1);
-      else if (k === "int") interrupt(); else if (k === "clear") { ses.lines = []; scr.textContent = ""; }
+      else if (k === "int") interrupt(); else if (k === "clear") { ses.lines = []; lines.textContent = ""; }
       inp.focus();
     });
     el.querySelector(".pchips").addEventListener("click", function (e) {
