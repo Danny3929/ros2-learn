@@ -8,8 +8,16 @@ $url = "https://danny3929.github.io/ros2-learn"
 
 foreach ($f in "app.js", "sw.js") { node --check $f; if ($LASTEXITCODE) { throw "Syntax error in $f" } }
 
+# Pre-publish check (shared-web\precheck.js): every lesson renders and fits a phone, nothing throws, files are cached.
+$pre = "C:\Users\hp\shared-web\precheck.js"; $el = "C:\Users\hp\ros2-learn\node_modules\.bin\electron.cmd"
+if ((Test-Path $pre) -and (Test-Path $el)) {
+  & $el $pre $PSScriptRoot
+  if ($LASTEXITCODE) { throw "The pre-publish check failed. Fix the problems listed above, then run publish again." }
+} else { "Skipping the pre-publish check (shared-web tools not found)." }
+
 git add -A
-if (-not (git status --porcelain)) { "Nothing to publish."; return }
+$ahead = [int](git rev-list --count origin/main..HEAD 2>$null)
+if (-not (git status --porcelain) -and $ahead -eq 0) { "Nothing to publish."; return }
 
 # Bump the cache name so installed copies fetch the new files.
 $sw = Get-Content sw.js -Raw

@@ -164,6 +164,7 @@
     var html = "";
     $("home").classList.toggle("active", !activeId);
     $("practicelink").classList.toggle("active", activeId === "practice");
+    $("reviewlink").classList.toggle("active", activeId === "review");
     mods.forEach(function (m) {
       var has = m.lessons && m.lessons.length, n = has ? m.lessons.filter(function (l) { return state.done[l.id]; }).length : 0;
       html += '<div class="mod' + (has ? "" : " soon") + '"><h3>' + esc(m.title) +
@@ -284,7 +285,7 @@
       pyw.onmessage = function (ev) { var m = ev.data, f = pyPending[m.id]; if (f) { delete pyPending[m.id]; f(m); } };
       pyw.onerror = function () { reject(new Error("Python could not start.")); };
       pyCall({ type: "init", version: window.PYODIDE_VERSION, boot: window.PYBOOT }).then(function (m) {
-        if (m.ok) resolve(); else reject(new Error(m.error || "Python could not load."));
+        if (m.ok) { try { localStorage.setItem("ros2learn.pyready", "1"); } catch (e) {} resolve(); } else reject(new Error(m.error || "Python could not load."));
       });
     });
     pyReady.catch(function () { pyStop(); });
@@ -295,7 +296,7 @@
 
   function getSession(spec) {
     if (!sessions[spec.id]) {
-      sessions[spec.id] = { sim: ROSSIM.create({ start: spec.start, files: spec.files, dirs: spec.dirs, cwd: spec.cwd }), lines: [], hist: [], hi: 0, draft: "", mode: "sh", more: false };
+      sessions[spec.id] = { sim: ROSSIM.create({ start: spec.start, files: spec.files, dirs: spec.dirs, cwd: spec.cwd, filesAfter: spec.filesAfter, finish: spec.finish }), lines: [], hist: [], hi: 0, draft: "", mode: "sh", more: false };
     }
     return sessions[spec.id];
   }
@@ -596,17 +597,47 @@
     });
   }
 
+  // Python is about 10 MB. It downloads the first time a practical needs it and is then kept for offline use.
+  // This box lets you download it on purpose, for example on Wi-Fi before a trip.
+  function pyOfflineBox() {
+    var box = $("pyoffline"); if (!box) return;
+    var ready = false; try { ready = localStorage.getItem("ros2learn.pyready") === "1"; } catch (e) {}
+    function paint(msg, busyNow) {
+      box.innerHTML = '<b>🐍 Python for the practicals</b><p>' + (msg || (ready
+        ? "Python is saved on this device, so the Python practicals also work offline."
+        : "The Python practicals need a one-time download of about 10 MB. Do it now on Wi-Fi, and they will work offline afterwards.")) + "</p>" +
+        (ready || busyNow ? "" : '<button type="button" class="pydl">Download Python now (10 MB)</button>');
+      var b = box.querySelector(".pydl");
+      if (b) b.addEventListener("click", function () {
+        paint("Downloading Python... this can take a minute on a slow connection.", true);
+        pyEnsure().then(function () { ready = true; paint(); }, function (err) { paint("Could not download Python (" + ((err && err.message) || "no connection") + "). Check your internet and try again."); });
+      });
+    }
+    paint();
+  }
+
+  function renderReview() {
+    currentId = "review"; renderNav("review"); renderHud();
+    var mainEl = document.querySelector(".main"); if (mainEl) mainEl.classList.remove("home");
+    window.AppReview.render($("lesson"), {
+      lessons: lessons, isDone: function (id) { return !!state.done[id]; },
+      award: award, confetti: confetti, esc: esc, xp: 10
+    });
+    window.scrollTo(0, 0); closeNav();
+  }
+
   function renderPractice() {
     currentId = "practice"; renderNav("practice"); renderHud();
     document.querySelector(".main").classList.remove("home");
     var h = '<a class="backhome" href="#/">← Home</a><h1>Practice terminal</h1><div class="meta">Works on a phone, no ROS needed</div>' +
-      practicalHtml(SANDBOX) + '<h2 class="sec">Guided practicals</h2><p>Short tasks that go with the lessons. Each one gives XP when every task is ticked.</p><ul class="praclist">';
+      practicalHtml(SANDBOX) + '<div class="pyoffline" id="pyoffline"></div><h2 class="sec">Guided practicals</h2><p>Short tasks that go with the lessons. Each one gives XP when every task is ticked.</p><ul class="praclist">';
     (window.PRACTICALS || []).forEach(function (p) {
       var done = state.prac[p.id] && state.prac[p.id].complete;
       h += '<li><a href="#/' + p.lesson + '">' + (done ? "✓ " : "") + esc("Lesson " + p.lesson + ": " + p.title) + "</a></li>";
     });
     $("lesson").innerHTML = h + "</ul>";
     mountPracticals($("lesson"));
+    pyOfflineBox();
     window.scrollTo(0, 0); closeNav();
   }
 
@@ -624,6 +655,7 @@
       (next ? (started ? "Next up: " : "Start with: ") + "<b>" + esc(next.id + " " + next.title) + "</b> (about " + next.minutes + " min)" : "You have finished every available lesson. More are coming.") +
       "</p></div>" +
       (next ? '<a class="btn go" href="#/' + next.id + '">' + (started ? "CONTINUE" : "START") + " →</a>" : "") + "</div>" +
+      '<a class="pracbanner" href="#/review"><span>🔁</span><div><b>Review quiz</b><small>Five quick questions from lessons you have finished.</small></div></a>' +
       '<a class="pracbanner" href="#/practice"><span>💻</span><div><b>Practice terminal</b><small>Try commands right here, even on your phone. No ROS needed.</small></div></a>' +
       '<h2 class="sec">Your path</h2><div class="cards">';
     mods.forEach(function (m) {
@@ -641,7 +673,7 @@
       var on = state.badges[b.id];
       h += '<div class="trophy ' + (on ? "on" : "off") + '" title="' + esc(b.desc) + '"><i>' + (on ? b.icon : "🔒") + "</i>" + esc(b.name) + "</div>";
     });
-    $("lesson").innerHTML = h + '</div><p class="about">Humble on Ubuntu 22.04 (WSL) · Python · simulation first. Wrong answers never cost XP, so experiment. Tell Claude when you are stuck and paste the error.</p>';
+    $("lesson").innerHTML = h + '</div><p class="about">Humble on Ubuntu 22.04 (WSL) · Python · simulation first. Wrong answers never cost XP, so experiment. Tell Claude when you are stuck and paste the error.</p><p class="about"><button class="link" data-backup>Back up or restore your progress</button> (it is saved on this device only)</p>';
     document.querySelector(".main").classList.add("home");
   }
 
@@ -784,7 +816,7 @@
 
   function route() {
     var m = location.hash.match(/^#\/(.+)$/);
-    if (m && m[1] === "practice") renderPractice(); else if (m) renderLesson(decodeURIComponent(m[1])); else renderWelcome();
+    if (m && m[1] === "practice") renderPractice(); else if (m && m[1] === "review") renderReview(); else if (m) renderLesson(decodeURIComponent(m[1])); else renderWelcome();
   }
   window.addEventListener("hashchange", route);
 

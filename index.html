@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ROS 2 Learn</title>
 <meta name="theme-color" content="#5b4bdb">
 <link rel="manifest" href="manifest.json">
@@ -19,6 +19,7 @@
     <a class="brand" href="#/" title="Back to home">ROS 2 Learn <span>Humble · WSL · Python</span></a>
     <a class="nav-item home-link" id="home" href="#/">🏠 Home</a>
     <a class="nav-item practice-link" id="practicelink" href="#/practice">💻 Practice terminal</a>
+    <a class="nav-item review-link" id="reviewlink" href="#/review">🔁 Review quiz</a>
     <div class="hud" id="hud"></div>
     <nav id="nav"></nav>
     <div class="side-foot"><button id="reset" class="link">Reset all progress</button></div>
@@ -44,7 +45,10 @@
 <script src="content/practicals.js"></script>
 <script src="content/pyworker.js"></script>
 <script src="content/enhance.js"></script>
+<script src="content/backup.js"></script>
+<script src="content/review.js"></script>
 <script src="app.js"></script>
+<script>AppBackup.init({ app: "ros2-learn", title: "ROS 2 Learn", key: "ros2learn.v1" });</script>
 <script>
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
 </script>

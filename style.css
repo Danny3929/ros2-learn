@@ -261,3 +261,41 @@ details.expect[open] > .out { margin-top: 0; }
 .pedbtns button { flex: 1 1 auto; border: 1px solid #3b3570; background: #26214f; color: #dcd8ff; border-radius: 10px; font: 14px system-ui; min-height: 42px; padding: 0 12px; cursor: pointer; }
 .pedbtns button[data-e="run"] { background: var(--ok); border-color: var(--ok); color: #fff; font-weight: 700; }
 .pbusy .pin { opacity: .5; }
+
+/* ---------- phone hardening (ported from the PLC app) ---------- */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+a, button, .btn, .card, label { -webkit-tap-highlight-color: transparent; }
+button, .btn, .card, .nav-item, summary { touch-action: manipulation; }
+/* press-and-hold controls must not select text or show the share menu */
+.pchips button, .pkeys button, .pdpad button, .pedbtns button, .preset, .phint, .prun, .stepdone, .btn, .menu, button.opt, button.quest {
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+}
+/* hover effects stick after a tap on a touch screen */
+@media (hover: none) {
+  .btn:hover:not(:active), .btn.ghost:hover { filter: none; border-color: inherit; }
+  .quiz button.opt:hover:not(:disabled) { border-color: inherit; }
+  .cmd button:hover { background: #2a343d; }
+  details.expect > summary:hover { color: inherit; border-left-color: inherit; }
+}
+@media (max-width: 800px) {
+  .side { height: 100vh; height: 100dvh; }
+  /* below 16px, iPhones zoom the whole page when a field gets focus */
+  input, select, textarea { font-size: 16px !important; }
+}
+@supports (padding: max(0px)) {
+  @media (max-width: 800px) { .main { padding-bottom: max(60px, calc(env(safe-area-inset-bottom) + 40px)); } }
+  .toasts { bottom: max(16px, env(safe-area-inset-bottom)); }
+}
+
+.pyoffline { margin: 18px 0; padding: 14px 16px; border: 2px dashed var(--accent); border-radius: var(--radius); background: var(--note-bg); }
+.pyoffline p { margin: 6px 0 10px; max-width: none; }
+.pyoffline .pydl { min-height: 44px; padding: 0 18px; border: 0; border-radius: 10px; background: var(--accent); color: var(--accent-ink); font: 700 15px var(--font); cursor: pointer; }
+
+/* ---------- review quiz ---------- */
+.review-link { font-weight: 700; }
+.rvbar { margin-top: 16px; font-size: 14px; }
+.rvout .why { margin-top: 10px; }
+.rvout .btn, .rvagain { margin-top: 6px; }
+
+/* long file paths and commands inside a sentence must wrap instead of widening the page on a phone */
+code { overflow-wrap: anywhere; }
