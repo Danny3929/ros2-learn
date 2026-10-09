@@ -1,9 +1,9 @@
 // Bump CACHE whenever any file changes so installed copies pick up the update.
 // Python (Pyodide) files from the CDN are big, so they live in their own cache that is kept across updates.
 const PYCACHE = "ros2-learn-pyodide";
-const CACHE = "ros2-learn-v25";
+const CACHE = "ros2-learn-v26";
 const FILES = [
-  "./", "./index.html", "./style.css", "./app.js", "./content/backup.js", "./content/review.js", "./manifest.json",
+  "./", "./index.html", "./style.css", "./app.js", "./content/backup.js", "./content/review.js", "./content/install.js", "./manifest.json",
   "./content/m0_linux.js", "./content/m1_python.js", "./content/m2_turtlesim.js",
   "./content/m3_workspaces.js", "./content/m4_robot.js", "./content/m5_mapping.js", "./content/m6_talking.js", "./content/m7_debugging.js", "./content/planned.js",
   "./content/story.js", "./content/enhance.js", "./content/sim.js", "./content/practicals.js", "./content/pyworker.js",
