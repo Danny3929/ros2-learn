@@ -258,9 +258,44 @@
     intro: "A blank pretend Ubuntu with ROS 2 Humble. Type anything from the lessons, or tap a button to fill it in. Nothing here can break your real computer.",
     chips: ["help", "ls", "pwd", "ros2 run turtlesim turtlesim_node", "ros2 run turtlesim turtle_teleop_key", "ros2 run demo_nodes_cpp talker", "ros2 run demo_nodes_cpp listener", "ros2 node list", "ros2 topic list -t", "ros2 topic echo /chatter --once", "ros2 service list", "ros2 param list /turtlesim", "stop"]
   };
+  // ---------- real Python for the practice terminal (content/pyworker.js) ----------
+  var pyw = null, pyReady = null, pySeq = 0, pyPending = {};
+  function pyStop() {
+    if (pyw) { try { pyw.terminate(); } catch (e) {} }
+    pyw = null; pyReady = null;
+    var pend = pyPending; pyPending = {};
+    Object.keys(pend).forEach(function (k) { pend[k]({ timeout: true }); });
+  }
+  function pyCall(msg, limitMs) {
+    return new Promise(function (resolve) {
+      var id = ++pySeq, timer = null;
+      pyPending[id] = function (m) { if (timer) clearTimeout(timer); resolve(m); };
+      if (limitMs) timer = setTimeout(function () { if (pyPending[id]) pyStop(); }, limitMs);
+      msg.id = id; pyw.postMessage(msg);
+    });
+  }
+  function pyEnsure() {
+    if (pyReady) return pyReady;
+    pyReady = new Promise(function (resolve, reject) {
+      if (!window.Worker || !window.pyWorkerMain || !window.URL || !URL.createObjectURL) { reject(new Error("This browser cannot run Python here.")); return; }
+      try {
+        pyw = new Worker(URL.createObjectURL(new Blob(["(" + window.pyWorkerMain.toString() + ")()"], { type: "text/javascript" })));
+      } catch (e) { reject(e); return; }
+      pyw.onmessage = function (ev) { var m = ev.data, f = pyPending[m.id]; if (f) { delete pyPending[m.id]; f(m); } };
+      pyw.onerror = function () { reject(new Error("Python could not start.")); };
+      pyCall({ type: "init", version: window.PYODIDE_VERSION, boot: window.PYBOOT }).then(function (m) {
+        if (m.ok) resolve(); else reject(new Error(m.error || "Python could not load."));
+      });
+    });
+    pyReady.catch(function () { pyStop(); });
+    return pyReady;
+  }
+  var PY_LIMIT_MS = 8000;
+  var PY_BANNER = 'Python 3.10.12 (main, Jun 11 2023, 05:26:28) [GCC 11.4.0] on linux\nType "help", "copyright", "credits" or "license" for more information.';
+
   function getSession(spec) {
     if (!sessions[spec.id]) {
-      sessions[spec.id] = { sim: ROSSIM.create({ start: spec.start, files: spec.files, dirs: spec.dirs, cwd: spec.cwd }), lines: [], hist: [], hi: 0, draft: "" };
+      sessions[spec.id] = { sim: ROSSIM.create({ start: spec.start, files: spec.files, dirs: spec.dirs, cwd: spec.cwd }), lines: [], hist: [], hi: 0, draft: "", mode: "sh", more: false };
     }
     return sessions[spec.id];
   }
@@ -286,6 +321,9 @@
       '<div class="pdpad" hidden><button type="button" data-d="up" aria-label="Forward">▲</button><button type="button" data-d="left" aria-label="Turn left">◀</button>' +
       '<button type="button" data-d="down" aria-label="Backward">▼</button><button type="button" data-d="right" aria-label="Turn right">▶</button></div>' +
       '<div class="pnote">Turtle window (pretend). Start <code>turtle_teleop_key</code> to unlock the arrow pad.</div></div>' +
+      '<div class="pedit" hidden><div class="pedhead"><b class="pedname"></b><span>editor (like nano)</span></div>' +
+      '<textarea class="pedtext" rows="9" spellcheck="false" autocapitalize="none" autocorrect="off" autocomplete="off" aria-label="File editor"></textarea>' +
+      '<div class="pedbtns"><button type="button" data-e="indent">⇥ 4 spaces</button><button type="button" data-e="save">💾 Save</button><button type="button" data-e="run">▶ Save and run</button><button type="button" data-e="cancel">Cancel</button></div></div>' +
       '<div class="pscreen"><div class="plines" role="log" aria-live="polite"></div>' +
       '<form class="pform" autocomplete="off"><span class="pps"></span>' +
       '<input class="pin" type="text" autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="send" aria-label="Terminal: type a command and press Enter"></form></div>' +
@@ -293,7 +331,7 @@
     (spec.chips || []).forEach(function (c) { h += '<button type="button" data-cmd="' + esc(c).replace(/"/g, "&quot;") + '">' + esc(shortLabel(c)) + "</button>"; });
     h += '</div>' +
       '<div class="pkeys"><button type="button" data-k="tab">Tab</button><button type="button" data-k="up">↑</button><button type="button" data-k="down">↓</button>' +
-      '<button type="button" data-k="int">Ctrl+C</button><button type="button" data-k="clear">Clear</button></div></section>';
+      '<button type="button" data-k="int">Ctrl+C</button><button type="button" data-k="eof">Ctrl+D</button><button type="button" data-k="clear">Clear</button></div></section>';
     return h;
   }
 
@@ -315,8 +353,11 @@
       var d = document.createElement("div"); d.className = "pl " + cls; d.textContent = text; lines.appendChild(d);
       scr.scrollTop = scr.scrollHeight;
     }
-    function prompt() { return sim.prompt(); }
-    ps.textContent = prompt();
+    function prompt() { return ses.mode === "py" ? (ses.more ? "... " : ">>> ") : sim.prompt(); }
+    var ed = el.querySelector(".pedit"), edtext = el.querySelector(".pedtext"), edfile = null, busy = false;
+    function setPrompt() { ps.textContent = prompt(); }
+    function setBusy(b) { busy = b; inp.disabled = b; el.classList.toggle("pbusy", b); if (!b) { setPrompt(); inp.focus(); } }
+    setPrompt();
     if (!ses.lines.length) ses.lines.push({ c: "sys", t: "Pretend Ubuntu 22.04 with ROS 2 Humble. Type  help  to see what works." });
     ses.lines.forEach(function (l) { addLine(l.c, l.t); });
     function log(cls, text) { ses.lines.push({ c: cls, t: text }); if (ses.lines.length > 300) ses.lines.shift(); addLine(cls, text); }
@@ -371,7 +412,63 @@
 
     // ----- typing -----
     function clean(line) { return line.replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/—/g, "--").replace(/–/g, "-"); }
+    function showPy(out) {
+      var chunks = [];
+      (out || []).forEach(function (o) {
+        var last = chunks[chunks.length - 1];
+        if (last && last.e === !!o.e) last.t += "\n" + o.t; else chunks.push({ e: !!o.e, t: o.t });
+      });
+      chunks.forEach(function (c) { log(c.e ? "pe" : "po", c.t); });
+      return (out || []).map(function (o) { return o.t; }).join("\n");
+    }
+    function pyFail(err) {
+      log("pe", (err && err.message ? err.message : "Python could not load.") + " Python needs an internet connection the first time (about 10 MB). Check it and try again.");
+    }
+    function loadPy() {
+      if (!pyReady) log("sys", "Loading Python (the first time is about 10 MB, then it is saved)...");
+      return pyEnsure();
+    }
+    function runPy(req, line) {
+      setBusy(true);
+      loadPy().then(function () {
+        if (req.kind === "repl") {
+          return pyCall({ type: "repl-reset" }).then(function () {
+            ses.mode = "py"; ses.more = false; log("po", PY_BANNER);
+          });
+        }
+        return pyCall({ type: "script", src: req.src, name: req.name }, PY_LIMIT_MS).then(function (m) {
+          if (m.timeout) {
+            var t = "Stopped: the program ran for more than " + PY_LIMIT_MS / 1000 + " seconds (an endless loop?). Python was restarted.";
+            log("pe", t); sim.notePy({ kind: req.kind, name: req.name, src: req.src, line: line, out: t, ok: false }); return;
+          }
+          var text = showPy(m.out);
+          sim.notePy({ kind: req.kind, name: req.name, src: req.src, line: line, out: text, ok: !!m.good });
+        });
+      }, pyFail).then(function () { setBusy(false); check(); });
+    }
+    function runRepl(raw) {
+      var line = raw;
+      log("echo", prompt() + line);
+      if (line.trim() && ses.hist[ses.hist.length - 1] !== line) ses.hist.push(line);
+      ses.hi = ses.hist.length; ses.draft = "";
+      setBusy(true);
+      pyCall({ type: "repl", line: line }, PY_LIMIT_MS).then(function (m) {
+        if (m.timeout) {
+          log("pe", "Stopped: that took more than " + PY_LIMIT_MS / 1000 + " seconds (an endless loop?). Python was restarted and you are back at the terminal.");
+          ses.mode = "sh"; ses.more = false; return;
+        }
+        var text = showPy(m.out);
+        if (m.state === "more") ses.more = true;
+        else {
+          ses.more = false;
+          if (m.state === "exit") ses.mode = "sh";
+          if (line.trim()) sim.notePy({ kind: "repl", line: line, out: text, ok: !/Error|Traceback/.test(text) });
+        }
+      }).then(function () { setBusy(false); check(); });
+    }
     function run(raw) {
+      if (busy) return;
+      if (ses.mode === "py") { runRepl(raw); return; }
       var line = clean(raw);
       log("echo", prompt() + line);
       var r = sim.exec(line);
@@ -379,9 +476,52 @@
       else if (r.out !== "") log(r.code ? "pe" : "po", r.out.replace(/\n+$/, ""));
       if (line.trim() && ses.hist[ses.hist.length - 1] !== line) ses.hist.push(line);
       ses.hi = ses.hist.length; ses.draft = "";
-      ps.textContent = prompt();
-      draw(); check();
+      setPrompt();
+      draw();
+      if (r.edit) openEditor(r.edit);
+      else if (r.py) runPy(r.py, line);
+      check();
     }
+
+    // ----- the little editor that stands in for nano -----
+    function openEditor(e) {
+      edfile = e;
+      el.querySelector(".pedname").textContent = e.name;
+      edtext.value = sim.fileText(e.path) || "";
+      ed.hidden = false; edtext.focus();
+      try { edtext.setSelectionRange(edtext.value.length, edtext.value.length); } catch (x) {}
+      ed.scrollIntoView({ block: "nearest" });
+    }
+    function closeEditor() { ed.hidden = true; edfile = null; inp.focus(); }
+    function saveEditor() {
+      if (!edfile) return null;
+      var text = clean(edtext.value).replace(/\u00a0/g, " ");
+      if (text && text.slice(-1) !== "\n") text += "\n";
+      sim.mkfile(edfile.path, text);
+      var name = edfile.name;
+      log("sys", "Saved " + name + " (" + (text ? text.split("\n").length - 1 : 0) + " lines)");
+      closeEditor(); check();
+      return name;
+    }
+    function indentAtCaret() {
+      var a = edtext.selectionStart, b = edtext.selectionEnd;
+      edtext.value = edtext.value.slice(0, a) + "    " + edtext.value.slice(b);
+      edtext.selectionStart = edtext.selectionEnd = a + 4;
+    }
+    edtext.addEventListener("keydown", function (e) {
+      if (e.key === "Tab") { e.preventDefault(); indentAtCaret(); }
+      else if (e.ctrlKey && (e.key === "s" || e.key === "S")) { e.preventDefault(); saveEditor(); }
+      else if (e.key === "Escape") { e.preventDefault(); closeEditor(); }
+    });
+    ed.querySelector(".pedbtns").addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-e]"); if (!b) return;
+      var k = b.getAttribute("data-e");
+      if (k === "indent") { indentAtCaret(); edtext.focus(); }
+      else if (k === "save") saveEditor();
+      else if (k === "cancel") { log("sys", "Not saved."); closeEditor(); }
+      else if (k === "run") { var n = saveEditor(); if (n && /\.py$/.test(n)) run("python3 " + n); }
+    });
+
     scr.addEventListener("click", function () {
       var sel = window.getSelection && window.getSelection();
       if (sel && String(sel).length) return;
@@ -393,6 +533,7 @@
       run(v); inp.focus();
     });
     function complete() {
+      if (ses.mode === "py") { inp.value += "    "; return; }
       var r = sim.complete(inp.value);
       inp.value = r.line;
       if (r.options.length) log("sys", r.options.join("   "));
@@ -404,22 +545,33 @@
       inp.value = ses.hi === ses.hist.length ? ses.draft : ses.hist[ses.hi];
     }
     function interrupt() {
+      if (busy) return;
       var live = inp.value; log("echo", prompt() + live + "^C"); inp.value = "";
+      if (ses.mode === "py") {
+        ses.more = false; log("pe", "KeyboardInterrupt");
+        if (pyw) pyCall({ type: "repl-interrupt" });
+        setPrompt(); return;
+      }
       var o = sim.interrupt(); if (o !== "^C") log("po", o.replace(/^\^C\n?/, ""));
       draw(); check();
+    }
+    function eof() {
+      if (busy || ses.mode !== "py") return;
+      log("echo", prompt()); ses.mode = "sh"; ses.more = false; setPrompt();
     }
     inp.addEventListener("keydown", function (e) {
       if (e.key === "Tab") { e.preventDefault(); complete(); }
       else if (e.key === "ArrowUp") { e.preventDefault(); histMove(-1); }
       else if (e.key === "ArrowDown") { e.preventDefault(); histMove(1); }
       else if (e.ctrlKey && (e.key === "c" || e.key === "C")) { e.preventDefault(); interrupt(); }
+      else if (e.ctrlKey && (e.key === "d" || e.key === "D")) { e.preventDefault(); eof(); }
       else if (e.ctrlKey && (e.key === "l" || e.key === "L")) { e.preventDefault(); ses.lines = []; lines.textContent = ""; }
     });
     el.querySelector(".pkeys").addEventListener("click", function (e) {
       var b = e.target.closest("button[data-k]"); if (!b) return;
       var k = b.getAttribute("data-k");
       if (k === "tab") complete(); else if (k === "up") histMove(-1); else if (k === "down") histMove(1);
-      else if (k === "int") interrupt(); else if (k === "clear") { ses.lines = []; lines.textContent = ""; }
+      else if (k === "int") interrupt(); else if (k === "eof") eof(); else if (k === "clear") { ses.lines = []; lines.textContent = ""; }
       inp.focus();
     });
     el.querySelector(".pchips").addEventListener("click", function (e) {

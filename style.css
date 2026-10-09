@@ -249,3 +249,15 @@ details.expect[open] > .out { margin-top: 0; }
 .pchips { border-top: 0; }
 @media (max-width: 800px) { .pscreen { height: 260px; } }
 .pchips { scrollbar-width: none; } .pchips::-webkit-scrollbar { display: none; }
+
+/* ---------- practice terminal: file editor and python mode ---------- */
+.pedit { background: #14112b; border-bottom: 2px solid var(--accent); padding: 10px 12px; }
+.pedit[hidden] { display: none; }
+.pedhead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; color: #b9b5dd; font-size: 12px; margin-bottom: 6px; }
+.pedhead b { color: #fff; font: 14px ui-monospace, Consolas, monospace; }
+.pedtext { width: 100%; box-sizing: border-box; min-height: 190px; resize: vertical; background: #0d0b1f; color: #fff; border: 1px solid #3b3570; border-radius: 8px; padding: 10px; font: 16px/1.45 ui-monospace, Consolas, monospace; tab-size: 4; white-space: pre; overflow: auto; outline: none; }
+.pedtext:focus { border-color: var(--accent); }
+.pedbtns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pedbtns button { flex: 1 1 auto; border: 1px solid #3b3570; background: #26214f; color: #dcd8ff; border-radius: 10px; font: 14px system-ui; min-height: 42px; padding: 0 12px; cursor: pointer; }
+.pedbtns button[data-e="run"] { background: var(--ok); border-color: var(--ok); color: #fff; font-weight: 700; }
+.pbusy .pin { opacity: .5; }

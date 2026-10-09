@@ -1,10 +1,12 @@
 // Bump CACHE whenever any file changes so installed copies pick up the update.
-const CACHE = "ros2-learn-v23";
+// Python (Pyodide) files from the CDN are big, so they live in their own cache that is kept across updates.
+const PYCACHE = "ros2-learn-pyodide";
+const CACHE = "ros2-learn-v24";
 const FILES = [
   "./", "./index.html", "./style.css", "./app.js", "./manifest.json",
   "./content/m0_linux.js", "./content/m1_python.js", "./content/m2_turtlesim.js",
   "./content/m3_workspaces.js", "./content/m4_robot.js", "./content/m5_mapping.js", "./content/m6_talking.js", "./content/m7_debugging.js", "./content/planned.js",
-  "./content/story.js", "./content/enhance.js", "./content/sim.js", "./content/practicals.js",
+  "./content/story.js", "./content/enhance.js", "./content/sim.js", "./content/practicals.js", "./content/pyworker.js",
   "./images/gazebo_mybot.jpg", "./images/gazebo_pillars.jpg", "./images/gazebo_turtlebot.jpg", "./images/nav2_costmaps.jpg", "./images/rqt_console.jpg", "./images/rviz_mybot.jpg", "./images/saved_map.jpg", "./images/slam_building_map.jpg", "./images/turtle_chase.jpg", "./images/turtle_circle.jpg", "./images/turtle_two.jpg",
   "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png",
 ];
@@ -16,7 +18,7 @@ self.addEventListener("install", (e) => {
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== PYCACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -43,6 +45,15 @@ self.addEventListener("fetch", (e) => {
     return;
   }
   const host = url.hostname;
+  if (host === "cdn.jsdelivr.net" && url.pathname.indexOf("/pyodide/") === 0) {
+    e.respondWith(
+      caches.open(PYCACHE).then((c) => c.match(e.request).then((hit) => hit || fetch(e.request).then((res) => {
+        if (res && res.ok) c.put(e.request, res.clone());
+        return res;
+      })))
+    );
+    return;
+  }
   const isFont = host === "fonts.googleapis.com" || host === "fonts.gstatic.com";
   e.respondWith(
     caches.match(e.request).then((hit) => hit || fetch(e.request).then((res) => {

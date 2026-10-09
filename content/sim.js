@@ -844,13 +844,32 @@
       },
       sudo: function () { return { out: "(sudo is not needed in the practice terminal: nothing here can be installed or broken)", code: 0 }; },
       apt: function () { return { out: "(apt is not part of the practice terminal)", code: 0 }; },
-      nano: function (a) { return { out: "(nano cannot open here. To make a file, use:  echo \"some text\" > " + (a[0] || "file.txt") + ")", code: 0 }; },
+      nano: function (a) {
+        var f = a.filter(function (x) { return x.charAt(0) !== "-"; })[0];
+        if (!f) return { out: "(give nano a file name, for example:  nano hello.py)", code: 1 };
+        var abs = norm(f), n = lookup(abs);
+        if (n && n.t === "d") return { out: "nano: " + f + " is a directory", code: 1 };
+        var par = parentOf(abs);
+        if (!par.dir || par.dir.t !== "d") return { out: "nano: cannot open " + f + ": no such folder", code: 1 };
+        return { out: "", code: 0, edit: { path: abs, name: f } };
+      },
       vim: function (a) { return CMDS.nano(a); },
+      vi: function (a) { return CMDS.nano(a); },
       man: function (a) { return { out: "(man pages are not in the practice terminal. Try  " + (a[0] || "ls") + " --help  in your real terminal.)", code: 0 }; },
       python3: function (a) {
+        if (!a.length) return { out: "", code: 0, py: { kind: "repl" } };
         if (a[0] === "--version" || a[0] === "-V") return { out: "Python 3.10.12", code: 0 };
-        return { out: "(the practice terminal cannot run Python files; do that in your real Ubuntu terminal)", code: 0 };
+        if (a[0] === "-c") {
+          if (a[1] === undefined) return { out: "Argument expected for the -c option\nusage: python3 [option] ... [-c cmd | -m mod | file | -] [arg] ...", code: 2 };
+          return { out: "", code: 0, py: { kind: "c", src: a[1], name: "<string>" } };
+        }
+        if (a[0].charAt(0) === "-") return { out: "(this python option is not in the practice terminal)", code: 0 };
+        var abs = norm(a[0]), n = lookup(abs);
+        if (!n) return { out: "python3: can't open file '" + abs + "': [Errno 2] No such file or directory", code: 2 };
+        if (n.t === "d") return { out: "python3: can't find '__main__' module in '" + abs + "'", code: 1 };
+        return { out: "", code: 0, py: { kind: "file", name: a[0], src: n.d } };
       },
+      python: function () { return { out: "Command 'python' not found, did you mean:\n  command 'python3' from deb python3\n  command 'python' from deb python-is-python3", code: 127 }; },
       rqt_graph: function () { return { out: NO_PRACTICE, code: 0 }; },
       ros2: ros2,
       stop: function (a) {
@@ -930,7 +949,7 @@
         else if (t.op === "&") { /* run in background: nodes already do */ }
         else cmds[cmds.length - 1].push(t);
       });
-      var outs = [], code = 0, clear = false, ranAny = false;
+      var outs = [], code = 0, clear = false, ranAny = false, special = null;
       for (var i = 0; i < cmds.length; i++) {
         if (i > 0) {
           var sp = seps[i - 1];
@@ -939,12 +958,13 @@
         }
         var r = runPipeline(cmds[i]);
         code = r.code; lastCode = code;
+        special = r.py || r.edit ? r : null;
         if (r.clear) { clear = true; outs = []; }
         else if (r.out !== "") outs.push(r.out);
         ranAny = true;
       }
       if (code === 0) S.okLines.push(line); else S.failed.push({ line: line, out: outs.join("\n") });
-      return { out: outs.join("\n"), code: code, clear: clear };
+      return { out: outs.join("\n"), code: code, clear: clear, py: special && special.py, edit: special && special.edit };
     };
 
     // ----- tab completion -----
@@ -998,6 +1018,24 @@
       return { line: before + (cands.length ? done : word), options: cands.length > 1 ? cands : [] };
     };
 
+    // Python results are reported by the page (real Python runs in a worker, see content/pyworker.js)
+    S.pyRuns = [];
+    S.replInputs = [];
+    S.notePy = function (rec) {
+      if (rec.kind === "repl") { S.replInputs.push(rec); return; }
+      S.pyRuns.push(rec);
+      if (!rec.ok) {
+        for (var i = S.okLines.length - 1; i >= 0; i--) if (S.okLines[i] === rec.line) { S.okLines.splice(i, 1); break; }
+        S.failed.push({ line: rec.line, out: rec.out });
+      }
+    };
+    S.ranPy = function (file) {
+      for (var i = S.pyRuns.length - 1; i >= 0; i--) if (S.pyRuns[i].kind === "file" && S.pyRuns[i].name.split("/").pop() === file) return S.pyRuns[i];
+      return null;
+    };
+    S.pyOutput = function (rx, file) {
+      return S.pyRuns.some(function (r) { return (!file || r.name.split("/").pop() === file) && rx.test(r.out); });
+    };
     S.sawError = function (rx) { return S.failed.some(function (f) { return rx.test(f.out); }); };
     S.subscribe = function (fn) { S.listeners.push(fn); };
     S.reset = function () { };
@@ -1007,7 +1045,7 @@
     Object.keys(opts.files || {}).forEach(function (p) { var abs = norm(p); S.mkdir(abs + "/.."); writeFile(abs, opts.files[p], false); });
     if (opts.cwd) cwd = norm(opts.cwd), env.PWD = cwd;
     (opts.start || []).forEach(function (c) { S.exec(c); });
-    S.history = []; S.okLines = []; S.failed = []; S.preloaded = (opts.start || []).length;
+    S.history = []; S.okLines = []; S.failed = []; S.pyRuns = []; S.replInputs = []; S.preloaded = (opts.start || []).length;
     return S;
   }
 
